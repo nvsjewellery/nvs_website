@@ -1,16 +1,38 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { Box, Heart, MapPin, Tag } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { OrnamentalDivider } from "@/components/OrnamentalDivider";
 import { actions, formatINR, useStore } from "@/lib/store";
-import { getProduct } from "@/lib/products";
+import { productsApi } from "@/lib/api";
 
 export const Route = createFileRoute("/account")({ component: Account });
+
+type WishlistPreviewItem = { id: string; name: string; price: number };
 
 function Account() {
   const user = useStore((s) => s.user);
   const wishlist = useStore((s) => s.wishlist);
   const nav = useNavigate();
+  const [previewItems, setPreviewItems] = useState<WishlistPreviewItem[]>([]);
+
+  useEffect(() => {
+    if (wishlist.length === 0) {
+      setPreviewItems([]);
+      return;
+    }
+    let cancelled = false;
+    Promise.all(
+      wishlist.slice(0, 3).map((id) =>
+        productsApi.getById(id).catch(() => null)
+      )
+    ).then((results) => {
+      if (!cancelled) {
+        setPreviewItems(results.filter((p): p is NonNullable<typeof p> => p !== null));
+      }
+    });
+    return () => { cancelled = true; };
+  }, [wishlist]);
 
   if (!user) {
     return (
@@ -61,13 +83,13 @@ function Account() {
           <Card icon={<Heart className="w-4 h-4" />} title="Wishlist">
             {wishlist.length === 0 ? (
               <p className="text-sm text-[color:var(--muted-foreground)]">No saved items yet.</p>
+            ) : previewItems.length === 0 ? (
+              <p className="text-sm text-[color:var(--muted-foreground)]">Loading...</p>
             ) : (
               <ul className="space-y-2">
-                {wishlist.slice(0, 3).map((id) => {
-                  const p = getProduct(id);
-                  if (!p) return null;
-                  return <li key={id} className="text-sm">{p.name} — <span className="text-[color:var(--gold-dark)]">{formatINR(p.price)}</span></li>;
-                })}
+                {previewItems.map((p) => (
+                  <li key={p.id} className="text-sm">{p.name} — <span className="text-[color:var(--gold-dark)]">{formatINR(p.price)}</span></li>
+                ))}
               </ul>
             )}
             <Link to="/wishlist" className="text-xs text-[color:var(--gold-dark)] font-semibold mt-3 inline-block">View all →</Link>

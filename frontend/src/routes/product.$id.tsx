@@ -1,17 +1,21 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useState } from "react";
-import { Heart, ShieldCheck, Truck, RefreshCcw, ArrowRight, Minus, Plus } from "lucide-react";
+import { Heart, ShieldCheck, Truck, RefreshCcw, Minus, Plus } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { OrnamentalDivider } from "@/components/OrnamentalDivider";
-import { getProduct, metalSlug } from "@/lib/products";
+import { metalSlug } from "@/lib/products";
+import { productsApi } from "@/lib/api";
 import { actions, computeBreakdown, formatINR, useStore } from "@/lib/store";
 
 export const Route = createFileRoute("/product/$id")({
   component: ProductPage,
-  loader: ({ params }) => {
-    const p = getProduct(params.id);
-    if (!p) throw notFound();
-    return p;
+  loader: async ({ params }) => {
+    try {
+      const p = await productsApi.getById(params.id);
+      return p;
+    } catch {
+      throw notFound();
+    }
   },
 });
 
@@ -54,7 +58,7 @@ function ProductPage() {
             <span className="text-sm text-[color:var(--muted-foreground)]">{p.weight} g</span>
           </div>
           <div className="mt-6">
-            <div className="text-4xl font-serif text-[color:var(--gold-dark)] font-bold">{formatINR(bd.total)}</div>
+            <div className="text-4xl font-serif text-[color:var(--gold-dark)] font-bold">{formatINR(p.price)}</div>
             <p className="text-xs text-[color:var(--muted-foreground)] mt-1">Inclusive of GST · Includes making charges</p>
           </div>
 

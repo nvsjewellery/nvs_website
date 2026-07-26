@@ -7,14 +7,30 @@ export const Route = createFileRoute("/signin")({ component: SignIn });
 
 function SignIn() {
   const nav = useNavigate();
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (email && pass) {
-      actions.signIn(email);
+    setError("");
+    if (!email || !pass || (mode === "register" && !name)) return;
+
+    setLoading(true);
+    try {
+      if (mode === "register") {
+        await actions.register(name, email, pass);
+      } else {
+        await actions.signIn(email, pass);
+      }
       nav({ to: "/account" });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -32,21 +48,51 @@ function SignIn() {
       </div>
       <div className="flex items-center justify-center p-8 bg-white">
         <form onSubmit={submit} className="w-full max-w-sm">
-          <h1 className="font-serif text-4xl text-[color:var(--espresso)]">Welcome back</h1>
-          <p className="text-sm text-[color:var(--muted-foreground)] mt-2">Sign in to view your orders, wishlist and saved addresses.</p>
-          <label className="block mt-6">
+          <h1 className="font-serif text-4xl text-[color:var(--espresso)]">
+            {mode === "login" ? "Welcome back" : "Create your account"}
+          </h1>
+          <p className="text-sm text-[color:var(--muted-foreground)] mt-2">
+            {mode === "login"
+              ? "Sign in to view your orders, wishlist and saved addresses."
+              : "Join NVS to start saving your favourites."}
+          </p>
+
+          {mode === "register" && (
+            <label className="block mt-6">
+              <span className="text-xs label-caps text-[color:var(--gold-dark)]">Full Name</span>
+              <input
+                type="text"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="mt-1 w-full border border-[color:var(--border)] rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[color:var(--gold)]"
+              />
+            </label>
+          )}
+
+          <label className={`block ${mode === "register" ? "mt-4" : "mt-6"}`}>
             <span className="text-xs label-caps text-[color:var(--gold-dark)]">Email</span>
             <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 w-full border border-[color:var(--border)] rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[color:var(--gold)]" />
           </label>
           <label className="block mt-4">
             <span className="text-xs label-caps text-[color:var(--gold-dark)]">Password</span>
-            <input type="password" required value={pass} onChange={(e) => setPass(e.target.value)} className="mt-1 w-full border border-[color:var(--border)] rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[color:var(--gold)]" />
+            <input type="password" required minLength={8} value={pass} onChange={(e) => setPass(e.target.value)} className="mt-1 w-full border border-[color:var(--border)] rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[color:var(--gold)]" />
           </label>
-          <button type="submit" className="pill-gold w-full justify-center mt-6 flex">Sign In</button>
-          <button type="button" onClick={() => { if (email && pass) { actions.signIn(email); nav({ to: "/account" }); } }} className="w-full text-sm text-[color:var(--gold-dark)] mt-4 font-medium">
-            New to NVS? Create account
+
+          {error && <p className="text-xs text-red-600 mt-3">{error}</p>}
+
+          <button type="submit" disabled={loading} className="pill-gold w-full justify-center mt-6 flex disabled:opacity-60">
+            {loading ? "Please wait..." : mode === "login" ? "Sign In" : "Create Account"}
           </button>
-          <p className="text-[11px] text-[color:var(--muted-foreground)] mt-6 text-center">Demo login — any email/password is accepted (mock only).</p>
+
+          <button
+            type="button"
+            onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}
+            className="w-full text-sm text-[color:var(--gold-dark)] mt-4 font-medium"
+          >
+            {mode === "login" ? "New to NVS? Create account" : "Already have an account? Sign in"}
+          </button>
+
           <div className="text-center mt-4">
             <Link to="/" className="text-xs text-[color:var(--muted-foreground)] hover:text-[color:var(--gold-dark)]">← Back to home</Link>
           </div>

@@ -7,8 +7,6 @@ const NAV = [
   { to: "/", label: "Home" },
   { to: "/gold", label: "Gold" },
   { to: "/silver", label: "Silver" },
-  { to: "/platinum", label: "Platinum" },
-  { to: "/diamond", label: "Diamond" },
   { to: "/contact", label: "Contact Us" },
 ];
 
@@ -20,7 +18,6 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-50">
-      {/* Row 1 */}
       <div style={{ backgroundColor: "var(--cream)" }} className="border-b border-[color:var(--gold)]/20">
         <div className="max-w-7xl mx-auto px-4 py-3 grid grid-cols-[1fr_auto_1fr] items-center gap-4">
           <Link to="/" className="flex items-center gap-3 min-w-0">
@@ -54,14 +51,13 @@ export function Header() {
           </div>
         </div>
       </div>
-      {/* Row 2 */}
       <div style={{ backgroundColor: "var(--cream-dark)" }} className="border-b border-[color:var(--gold)]/20">
         <div className="max-w-7xl mx-auto px-4 py-2.5 flex flex-col md:flex-row items-stretch md:items-center gap-3">
           <div className="flex items-center gap-2 bg-white rounded-full px-4 py-2 flex-1 max-w-md shadow-sm">
             <Search className="w-4 h-4 text-[color:var(--muted-foreground)]" />
             <input
               className="flex-1 bg-transparent outline-none text-sm"
-              placeholder="Search for gold, silver, diamond jewellery..."
+              placeholder="Search for gold or silver jewellery..."
             />
           </div>
           <nav className="flex items-center gap-1 flex-wrap justify-end">

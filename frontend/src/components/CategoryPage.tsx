@@ -1,10 +1,11 @@
 import { Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Layout } from "./Layout";
 import { OrnamentalDivider } from "./OrnamentalDivider";
 import { ProductCard } from "./ProductCard";
-import { CATEGORY_TREE, PRODUCTS, PURITIES, metalSlug } from "@/lib/products";
-import { formatINR } from "@/lib/store";
+import { CATEGORY_TREE, PURITIES, metalSlug } from "@/lib/products";
+import { productsApi } from "@/lib/api";
+import { formatINR, type Product } from "@/lib/store";
 
 type Metal = keyof typeof CATEGORY_TREE;
 
@@ -17,8 +18,28 @@ export function CategoryPage({ metal, description }: { metal: Metal; description
   const [maxPrice, setMaxPrice] = useState(1000000);
   const [sort, setSort] = useState("Featured");
 
+  const [liveProducts, setLiveProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    productsApi
+      .getByMetal(metal)
+      .then((data) => {
+        if (!cancelled) setLiveProducts(data as Product[]);
+      })
+      .catch(() => {
+        if (!cancelled) setLiveProducts([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [metal]);
+
   const products = useMemo(() => {
-    let list = PRODUCTS.filter((p) => p.metal === metal);
+    let list = liveProducts;
     if (sub !== "All") list = list.filter((p) => p.sub === sub);
     if (pur.length) list = list.filter((p) => pur.includes(p.purity));
     if (gem.length) list = list.filter((p) => gem.includes(p.gemstone));
@@ -27,9 +48,9 @@ export function CategoryPage({ metal, description }: { metal: Metal; description
     else if (sort === "Price: High to Low") list = [...list].sort((a, b) => b.price - a.price);
     else if (sort === "Weight") list = [...list].sort((a, b) => b.weight - a.weight);
     return list;
-  }, [metal, sub, pur, gem, maxPrice, sort]);
+  }, [liveProducts, sub, pur, gem, maxPrice, sort]);
 
-  const otherMetals = (["Gold","Silver","Platinum","Diamond","Rose Gold"] as const).filter((m) => m !== metal);
+  const otherMetal = metal === "Gold" ? "Silver" : "Gold";
 
   return (
     <Layout>
@@ -93,7 +114,9 @@ export function CategoryPage({ metal, description }: { metal: Metal; description
               <option>Weight</option>
             </select>
           </div>
-          {products.length === 0 ? (
+          {loading ? (
+            <div className="text-center py-20 text-[color:var(--muted-foreground)]">Loading products...</div>
+          ) : products.length === 0 ? (
             <div className="text-center py-20 text-[color:var(--muted-foreground)]">No products match your filters.</div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -102,11 +125,9 @@ export function CategoryPage({ metal, description }: { metal: Metal; description
           )}
 
           <div className="mt-16">
-            <p className="label-caps text-[color:var(--gold-dark)] text-xs mb-4">Explore Other Metals</p>
+            <p className="label-caps text-[color:var(--gold-dark)] text-xs mb-4">Explore Other Metal</p>
             <div className="flex flex-wrap gap-2">
-              {otherMetals.map((m) => (
-                <Link key={m} to={`/${metalSlug(m)}` as string} className="pill-gold-outline">{m}</Link>
-              ))}
+              <Link to={`/${metalSlug(otherMetal)}` as string} className="pill-gold-outline">{otherMetal}</Link>
             </div>
           </div>
         </div>

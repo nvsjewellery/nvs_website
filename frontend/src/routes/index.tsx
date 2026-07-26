@@ -1,11 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight, RefreshCw, TrendingUp } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { OrnamentalDivider } from "@/components/OrnamentalDivider";
 import { ProductCard, SimpleProductCard } from "@/components/ProductCard";
-import { PRODUCTS, metalSlug } from "@/lib/products";
-import { LIVE_RATES } from "@/lib/store";
+import { metalSlug } from "@/lib/products";
+import { productsApi } from "@/lib/api";
+import { type Product } from "@/lib/store";
 import hero from "@/assets/hero-gold.jpg";
 import catNecklaces from "@/assets/cat-necklaces.jpg";
 import catBangles from "@/assets/cat-bangles.jpg";
@@ -20,9 +21,6 @@ export const Route = createFileRoute("/")({ component: Home });
 const METALS = [
   { name: "Gold", grad: "linear-gradient(135deg,#f6d47a,#b8912f)" },
   { name: "Silver", grad: "linear-gradient(135deg,#e8e8ea,#a8a8ac)" },
-  { name: "Platinum", grad: "linear-gradient(135deg,#f4f4f6,#c9c9d1)" },
-  { name: "Diamond", grad: "linear-gradient(135deg,#f7fbff,#c9d8e8)" },
-  { name: "Rose Gold", grad: "linear-gradient(135deg,#f7c9bd,#c67a67)" },
 ];
 
 const FEATURED = [
@@ -39,10 +37,22 @@ const QUICK_TYPES = ["Rings","Chains","Earrings","Bangles","Necklaces","Pendants
 
 function Home() {
   const [tab, setTab] = useState("Rings");
-  const trending = PRODUCTS.filter((p) => p.metal === "Gold" && p.sub === tab).slice(0, 4);
-  const explore = PRODUCTS.filter((p) => ["Necklaces","Bangles","Rings","Earrings","Chains","Pendants"].includes(p.sub)).slice(0, 8);
-  const diamondPicks = PRODUCTS.filter((p) => p.metal === "Diamond").slice(0, 5);
-  const bridalPicks = PRODUCTS.filter((p) => p.sub === "Necklaces" || p.sub === "Mangalsutra").slice(0, 5);
+  const [goldProducts, setGoldProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    productsApi
+      .getByMetal("Gold")
+      .then((data) => { if (!cancelled) setGoldProducts(data as Product[]); })
+      .catch(() => { if (!cancelled) setGoldProducts([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const trending = goldProducts.filter((p) => p.sub === tab).slice(0, 4);
+  const explore = goldProducts.filter((p) => ["Necklaces","Bangles","Rings","Earrings","Chains","Pendants"].includes(p.sub)).slice(0, 8);
+  const bridalPicks = goldProducts.filter((p) => p.sub === "Necklaces" || p.sub === "Mangalsutra").slice(0, 5);
 
   return (
     <Layout>
@@ -73,29 +83,7 @@ function Home() {
       </section>
 
       {/* Live Rates */}
-      <div style={{ backgroundColor: "var(--cream)" }} className="border-y border-[color:var(--gold)]/20">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3 justify-between text-sm">
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="label-caps text-[color:var(--gold-dark)] flex items-center gap-1.5">
-              <TrendingUp className="w-3.5 h-3.5" />Today's Rates
-            </span>
-            {[
-              ["Gold 22K", LIVE_RATES["22K"]],
-              ["Gold 24K", LIVE_RATES["24K"]],
-              ["Gold 18K", LIVE_RATES["18K"]],
-              ["Silver", LIVE_RATES["92.5"]],
-            ].map(([l, v]) => (
-              <span key={l as string} className="bg-white/70 border border-[color:var(--gold)]/30 rounded-full px-3 py-1 text-xs font-medium">
-                <span className="text-[color:var(--espresso)]">{l}</span>
-                <span className="text-[color:var(--gold-dark)] ml-2 font-bold">₹{v}/g</span>
-              </span>
-            ))}
-          </div>
-          <button className="flex items-center gap-1.5 text-[color:var(--gold-dark)] font-semibold text-xs">
-            <RefreshCw className="w-3.5 h-3.5" /> View details
-          </button>
-        </div>
-      </div>
+      <LiveRatesBar />
 
       <OrnamentalDivider />
 
@@ -105,7 +93,7 @@ function Home() {
           <p className="label-caps text-[color:var(--gold-dark)] text-xs">Choose Your Metal</p>
           <h2 className="font-serif text-4xl md:text-5xl mt-2 text-[color:var(--espresso)]">Shop by Metal</h2>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 gap-4 max-w-xl mx-auto">
           {METALS.map((m) => (
             <Link key={m.name} to={`/${metalSlug(m.name)}` as string} className="bg-white border border-[color:var(--border)] rounded-2xl p-6 text-center hover:border-[color:var(--gold)] hover:shadow-md transition group">
               <div className="w-24 h-24 mx-auto rounded-full shadow-inner" style={{ background: m.grad }} />
@@ -160,11 +148,18 @@ function Home() {
               >{t}</button>
             ))}
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-            {(trending.length ? trending : PRODUCTS.filter((p) => p.metal === "Gold").slice(0, 4)).map((p) => (
-              <ProductCard key={p.id} p={p} />
-            ))}
-          </div>
+          {loading ? (
+            <div className="text-center py-10 text-[color:var(--muted-foreground)]">Loading...</div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+              {(trending.length ? trending : goldProducts.slice(0, 4)).map((p) => (
+                <ProductCard key={p.id} p={p} />
+              ))}
+              {goldProducts.length === 0 && (
+                <p className="col-span-full text-center text-[color:var(--muted-foreground)] py-6">No products yet.</p>
+              )}
+            </div>
+          )}
         </div>
       </section>
 
@@ -180,9 +175,14 @@ function Home() {
           </div>
           <Link to="/gold" className="pill-gold-outline">View All <ArrowRight className="w-4 h-4" /></Link>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-          {explore.map((p) => <ProductCard key={p.id} p={p} />)}
-        </div>
+        {!loading && (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+            {explore.map((p) => <ProductCard key={p.id} p={p} />)}
+            {explore.length === 0 && (
+              <p className="col-span-full text-center text-[color:var(--muted-foreground)] py-6">No products yet.</p>
+            )}
+          </div>
+        )}
       </section>
 
       {/* Shop by Type */}
@@ -208,28 +208,64 @@ function Home() {
 
       <OrnamentalDivider />
 
-      {/* NVS Picks */}
-      {[
-        { title: "Diamond Picks", label: "NVS Picks", tag: "Brilliance, cut to perfection", items: diamondPicks },
-        { title: "Bridal Collection Picks", label: "NVS Picks", tag: "For your most sacred day", items: bridalPicks },
-      ].map((sec, idx) => (
-        <div key={sec.title}>
-          <section className="max-w-7xl mx-auto px-4">
-            <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
-              <div>
-                <p className="label-caps text-[color:var(--gold-dark)] text-xs">{sec.label}</p>
-                <h2 className="font-serif text-4xl mt-2 text-[color:var(--espresso)]">{sec.title}</h2>
-                <p className="text-[color:var(--muted-foreground)] mt-1">{sec.tag}</p>
-              </div>
-              <Link to="/diamond" className="text-[color:var(--gold-dark)] font-semibold text-sm inline-flex items-center gap-1">View All <ArrowRight className="w-4 h-4" /></Link>
+      {/* Bridal Collection Picks (replaces old Diamond + Bridal dual-section) */}
+      {!loading && bridalPicks.length > 0 && (
+        <section className="max-w-7xl mx-auto px-4">
+          <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
+            <div>
+              <p className="label-caps text-[color:var(--gold-dark)] text-xs">NVS Picks</p>
+              <h2 className="font-serif text-4xl mt-2 text-[color:var(--espresso)]">Bridal Collection Picks</h2>
+              <p className="text-[color:var(--muted-foreground)] mt-1">For your most sacred day</p>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-5">
-              {sec.items.map((p) => <SimpleProductCard key={p.id} p={p} />)}
-            </div>
-          </section>
-          {idx === 0 && <OrnamentalDivider />}
-        </div>
-      ))}
+            <Link to="/gold" className="text-[color:var(--gold-dark)] font-semibold text-sm inline-flex items-center gap-1">View All <ArrowRight className="w-4 h-4" /></Link>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-5">
+            {bridalPicks.map((p) => <SimpleProductCard key={p.id} p={p} />)}
+          </div>
+        </section>
+      )}
     </Layout>
+  );
+}
+
+function LiveRatesBar() {
+  const [rates, setRates] = useState<{ gold: Record<string, number>; silver: Record<string, number> } | null>(null);
+
+  useEffect(() => {
+    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+    fetch(`${API_URL}/rates`)
+      .then((res) => res.json())
+      .then((data) => setRates(data.rates ?? null))
+      .catch(() => setRates(null));
+  }, []);
+
+  return (
+    <div style={{ backgroundColor: "var(--cream)" }} className="border-y border-[color:var(--gold)]/20">
+      <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3 justify-between text-sm">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="label-caps text-[color:var(--gold-dark)] flex items-center gap-1.5">
+            <TrendingUp className="w-3.5 h-3.5" />Today's Rates
+          </span>
+          {rates ? (
+            [
+              ["Gold 22K", rates.gold["22K"]],
+              ["Gold 24K", rates.gold["24K"]],
+              ["Gold 18K", rates.gold["18K"]],
+              ["Silver", rates.silver["92.5"]],
+            ].map(([l, v]) => (
+              <span key={l as string} className="bg-white/70 border border-[color:var(--gold)]/30 rounded-full px-3 py-1 text-xs font-medium">
+                <span className="text-[color:var(--espresso)]">{l}</span>
+                <span className="text-[color:var(--gold-dark)] ml-2 font-bold">₹{v}/g</span>
+              </span>
+            ))
+          ) : (
+            <span className="text-xs text-[color:var(--muted-foreground)]">Loading rates...</span>
+          )}
+        </div>
+        <button className="flex items-center gap-1.5 text-[color:var(--gold-dark)] font-semibold text-xs">
+          <RefreshCw className="w-3.5 h-3.5" /> View details
+        </button>
+      </div>
+    </div>
   );
 }

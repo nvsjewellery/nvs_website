@@ -1,0 +1,95 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  phone     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+enum Metal {
+  Gold
+  Silver
+}
+
+enum ProductStatus {
+  Active
+  Inactive
+  Draft
+}
+
+model Product {
+  id               String        @id @default(cuid())
+  name             String
+  description      String        @default("")
+  metal            Metal
+  category         String
+  purity           String
+  grossWeight      Float?
+  stoneWeight      Float?
+  stoneCost        Float?
+  hallmarkId       String?
+  sku              String        @unique
+  va               Float?
+  isDirectSterling Boolean       @default(false)
+  pieceCost        Float?
+  image            String        @default("")
+  status           ProductStatus @default(Draft)
+  stock            Int           @default(0)
+  sold             Int           @default(0)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@map("products")
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  metal       Metal
+  name        String
+  slug        String
+  metaTitle   String   @default("")
+  metaDesc    String   @default("")
+  image       String   @default("")
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([metal, slug])
+  @@map("categories")
+}
+
+enum DiscountScope {
+  VA
+  Total
+}
+
+enum DiscountKind {
+  percent
+  flat
+}
+
+model Discount {
+  id         String        @id @default(cuid())
+  metal      Metal
+  category   String
+  productIds String[]
+  scope      DiscountScope
+  kind       DiscountKind
+  value      Float
+  createdAt  DateTime      @default(now())
+
+  @@map("discounts")
+}
