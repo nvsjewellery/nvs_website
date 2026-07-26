@@ -31,8 +31,6 @@ if (typeof window !== "undefined") {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      // never trust cached user from localStorage as the source of truth —
-      // only cart/wishlist persist locally, user comes from the server
       state = { ...state, cart: parsed.cart ?? [], wishlist: parsed.wishlist ?? [] };
     }
   } catch {}
@@ -42,7 +40,6 @@ const listeners = new Set<() => void>();
 function emit() {
   if (typeof window !== "undefined") {
     try {
-      // only persist cart/wishlist locally — user session lives in the httpOnly cookie
       localStorage.setItem(KEY, JSON.stringify({ cart: state.cart, wishlist: state.wishlist }));
     } catch {}
   }
@@ -51,9 +48,6 @@ function emit() {
 function subscribe(l: () => void) { listeners.add(l); return () => listeners.delete(l); }
 const getSnapshot = () => state;
 
-// Hoisted to a stable constant — a new object literal here on every call
-// makes useSyncExternalStore think the snapshot always changed, causing
-// an infinite render loop warning.
 const SERVER_SNAPSHOT: State = { cart: [], wishlist: [], user: null, authChecked: false };
 const getServerSnapshot = () => SERVER_SNAPSHOT;
 
@@ -96,7 +90,6 @@ export const actions = {
     emit();
   },
 
-  // Real backend calls now — all throw on failure, caller handles the error
   async register(name: string, email: string, password: string) {
     const res = await api.register(name, email, password);
     if (res.user) {
@@ -119,7 +112,6 @@ export const actions = {
       emit();
     }
   },
-  // Call once on app load to check if a valid session cookie already exists
   async checkAuth() {
     try {
       const res = await api.getMe();
@@ -131,17 +123,36 @@ export const actions = {
   },
 };
 
-// Live rates in ₹/gram
-export const LIVE_RATES = {
-  "22K": 6820,
-  "24K": 7440,
-  "18K": 5580,
+// Live rates in ₹/gram (Accurate proportions relative to 24K @ ₹14,493/g)
+export let LIVE_RATES: Record<string, number> = {
+  "24K": 14493,
+  "22K": 13285,
+  "18K": 10870,
+  "14K": 8454,
+  "9K": 5435,
   "PT950": 3450,
-  "92.5": 92,
+  "92.5": 222,
 };
 
+// Call this when fetching rates from backend /api/rates
+export function setLiveRates(newRates: Record<string, number>) {
+  LIVE_RATES = { ...LIVE_RATES, ...newRates };
+  emit();
+}
+
 export function computeBreakdown(weight: number, purity: string, makingPct = 12, gstPct = 3) {
-  const rate = (LIVE_RATES as Record<string, number>)[purity] ?? 6820;
+  // Use correct purity rate or fallback proportionally based on 24K
+  const base24K = LIVE_RATES["24K"] ?? 14493;
+  let rate = LIVE_RATES[purity];
+
+  if (!rate) {
+    if (purity === "22K") rate = base24K * (22 / 24);
+    else if (purity === "18K") rate = base24K * (18 / 24);
+    else if (purity === "14K") rate = base24K * (14 / 24);
+    else if (purity === "9K") rate = base24K * (9 / 24);
+    else rate = base24K;
+  }
+
   const metalValue = Math.round(weight * rate);
   const making = Math.round(metalValue * (makingPct / 100));
   const subtotal = metalValue + making;
