@@ -5,7 +5,7 @@ import { OrnamentalDivider } from "./OrnamentalDivider";
 import { ProductCard } from "./ProductCard";
 import { CATEGORY_TREE, PURITIES, metalSlug } from "@/lib/products";
 import { productsApi } from "@/lib/api";
-import { formatINR, type Product } from "@/lib/store";
+import { type Product } from "@/lib/store";
 
 type Metal = keyof typeof CATEGORY_TREE;
 
@@ -15,7 +15,6 @@ export function CategoryPage({ metal, description }: { metal: Metal; description
   const [sub, setSub] = useState<string>("All");
   const [pur, setPur] = useState<string[]>([]);
   const [gem, setGem] = useState<string[]>([]);
-  const [maxPrice, setMaxPrice] = useState(1000000);
   const [sort, setSort] = useState("Featured");
 
   const [liveProducts, setLiveProducts] = useState<Product[]>([]);
@@ -43,12 +42,12 @@ export function CategoryPage({ metal, description }: { metal: Metal; description
     if (sub !== "All") list = list.filter((p) => p.sub === sub);
     if (pur.length) list = list.filter((p) => pur.includes(p.purity));
     if (gem.length) list = list.filter((p) => gem.includes(p.gemstone));
-    list = list.filter((p) => p.price <= maxPrice);
+    
     if (sort === "Price: Low to High") list = [...list].sort((a, b) => a.price - b.price);
     else if (sort === "Price: High to Low") list = [...list].sort((a, b) => b.price - a.price);
     else if (sort === "Weight") list = [...list].sort((a, b) => b.weight - a.weight);
     return list;
-  }, [liveProducts, sub, pur, gem, maxPrice, sort]);
+  }, [liveProducts, sub, pur, gem, sort]);
 
   const otherMetal = metal === "Gold" ? "Silver" : "Gold";
 
@@ -88,19 +87,6 @@ export function CategoryPage({ metal, description }: { metal: Metal; description
 
           <FilterBlock label="Gemstone">
             <PillGroup options={["Diamond","None"]} value={gem} onChange={setGem} />
-          </FilterBlock>
-
-          <FilterBlock label={`Price (Max)`}>
-            <input
-              type="range"
-              min={5000}
-              max={1000000}
-              step={5000}
-              value={maxPrice}
-              onChange={(e) => setMaxPrice(Number(e.target.value))}
-              className="w-full accent-[color:var(--gold)]"
-            />
-            <p className="text-xs text-[color:var(--muted-foreground)] mt-2">Up to {formatINR(maxPrice)}</p>
           </FilterBlock>
         </aside>
 
