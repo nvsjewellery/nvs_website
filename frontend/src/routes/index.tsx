@@ -208,7 +208,7 @@ function Home() {
 
       <OrnamentalDivider />
 
-      {/* Bridal Collection Picks (replaces old Diamond + Bridal dual-section) */}
+      {/* Bridal Collection Picks */}
       {!loading && bridalPicks.length > 0 && (
         <section className="max-w-7xl mx-auto px-4">
           <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
@@ -262,9 +262,12 @@ function LiveRatesBar() {
             <span className="text-xs text-[color:var(--muted-foreground)]">Loading rates...</span>
           )}
         </div>
-        <button className="flex items-center gap-1.5 text-[color:var(--gold-dark)] font-semibold text-xs">
-          <RefreshCw className="w-3.5 h-3.5" /> View details
-        </button>
+        <Link 
+  to={"/rates" as any} 
+  className="flex items-center gap-1.5 text-[color:var(--gold-dark)] font-semibold text-xs hover:underline transition-all"
+>
+  <RefreshCw className="w-3.5 h-3.5" /> View details
+</Link>
       </div>
     </div>
   );
