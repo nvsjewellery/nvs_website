@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Layout } from "@/components/Layout";
 import { OrnamentalDivider } from "@/components/OrnamentalDivider";
 import { getProduct } from "@/lib/products";
+
 import { actions, computeBreakdown, formatINR, useStore } from "@/lib/store";
 
 export const Route = createFileRoute("/cart")({ component: CartPage });
