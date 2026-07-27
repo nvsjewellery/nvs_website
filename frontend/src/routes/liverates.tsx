@@ -4,13 +4,18 @@ import { Layout } from "@/components/Layout";
 import { OrnamentalDivider } from "@/components/OrnamentalDivider";
 import { formatINR } from "@/lib/store";
 
-// 1. ADD THIS ROUTE EXPORT:
 export const Route = createFileRoute("/liverates")({
   component: LiveRatesPage,
 });
 
 interface LiveRatesResponse {
   success?: boolean;
+  gold24?: string | number;
+  gold22?: string | number;
+  gold18?: string | number;
+  silver?: string | number;
+  source?: string;
+  updatedAt?: string;
   rates?: {
     gold?: Record<string, number>;
     silver?: Record<string, number>;
@@ -29,50 +34,57 @@ export function LiveRatesPage() {
   const [silverRates, setSilverRates] = useState<{ label: string; purity: string; rate: number; desc: string }[]>([]);
 
   const fetchRates = () => {
-  setLoading(true);
-  fetch("https://suvarnagold-16e5.vercel.app/api/rates")
-    .then((res) => res.json())
-    .then((data) => {
-      // Helper to parse ₹ strings or numbers
-      const parseVal = (v: any) =>
-        typeof v === "number" ? v : Number(String(v ?? 0).replace(/[₹,]/g, ""));
+    setLoading(true);
+    fetch("https://suvarnagold-16e5.vercel.app/api/rates")
+      .then((res) => res.json())
+      .then((data: LiveRatesResponse) => {
+        // Helper to parse numbers or ₹ strings
+        const parseVal = (v: any) =>
+          typeof v === "number" ? v : Number(String(v ?? 0).replace(/[₹,]/g, ""));
 
-      // Extract base rates from response
-      const g24 = parseVal(data.gold24) || 14493;
-      const g22 = parseVal(data.gold22) || Math.round(g24 * (22 / 24));
-      const g18 = parseVal(data.gold18) || Math.round(g24 * (18 / 24));
-      const g14 = Math.round(g24 * (14 / 24));
-      const g9 = Math.round(g24 * (9 / 24));
+        // Extract Gold Rates (checks nested data.rates or root properties)
+        const g24 = data.rates?.gold?.["24K"] ?? parseVal(data.gold24) ?? 14493;
+        const g22 = data.rates?.gold?.["22K"] ?? parseVal(data.gold22) ?? Math.round(g24 * (22 / 24));
+        const g18 = data.rates?.gold?.["18K"] ?? parseVal(data.gold18) ?? Math.round(g24 * (18 / 24));
+        const g14 = data.rates?.gold?.["14K"] ?? Math.round(g24 * (14 / 24));
+        const g9 = data.rates?.gold?.["9K"] ?? Math.round(g24 * (9 / 24));
 
-      const silverBase = parseVal(data.silver) || 240; // ~999 fine silver base
-      const s925 = Math.round(silverBase * 0.925);
-      const s835 = Math.round(silverBase * 0.835);
-      const s80 = Math.round(silverBase * 0.80);
-      const s75 = Math.round(silverBase * 0.75);
+        // Extract Silver Base Rate (999 Fine Silver Base ~ 240)
+        const silverBase = parseVal(data.silver) || data.rates?.silver?.["92.5"] ? Math.round((data.rates?.silver?.["92.5"] ?? 222) / 0.925) : 240;
 
-      setGoldRates([
-        { label: "24K Gold", purity: "99.9% Pure Gold", rate: g24, desc: "Bullion & Gold Coins" },
-        { label: "22K Gold", purity: "91.6% BIS Hallmarked", rate: g22, desc: "Traditional Jewellery" },
-        { label: "18K Gold", purity: "75.0% Hallmarked", rate: g18, desc: "Diamond & Modern Gold" },
-        { label: "14K Gold", purity: "58.3% Pure Gold", rate: g14, desc: "Lightweight Jewellery" },
-        { label: "9K Gold", purity: "37.5% Pure Gold", rate: g9, desc: "Budget / Daily Wear" },
-      ]);
+        const s99 = Math.round(silverBase * 0.99);   // 99% Pure Silver
+        const s925 = Math.round(silverBase * 0.925); // Sterling Silver
+        const s835 = Math.round(silverBase * 0.835);
+        const s80 = Math.round(silverBase * 0.80);
+        const s75 = Math.round(silverBase * 0.75);
 
-      setSilverRates([
-        { label: "925 Sterling Silver", purity: "92.5% Hallmarked", rate: s925, desc: "Silver Fine Jewellery" },
-        { label: "83.5 Silver", purity: "83.5% Fine", rate: s835, desc: "Articles & Utensils" },
-        { label: "800 Silver (80%)", purity: "80.0% Purity", rate: s80, desc: "Payal & Traditional Wear" },
-        { label: "750 Silver (75%)", purity: "75.0% Purity", rate: s75, desc: "Ornaments & Crafts" },
-      ]);
+        setGoldRates([
+          { label: "24K Gold", purity: "99.9% Pure Gold", rate: g24, desc: "Bullion & Gold Coins" },
+          { label: "22K Gold", purity: "91.6% BIS Hallmarked", rate: g22, desc: "Traditional Jewellery" },
+          { label: "18K Gold", purity: "75.0% Hallmarked", rate: g18, desc: "Diamond & Modern Gold" },
+          { label: "14K Gold", purity: "58.3% Pure Gold", rate: g14, desc: "Lightweight Jewellery" },
+          { label: "9K Gold", purity: "37.5% Pure Gold", rate: g9, desc: "Budget / Daily Wear" },
+        ]);
 
-      if (data.source) setSource(data.source);
-      if (data.updatedAt) {
-        setUpdatedAt(new Date(data.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-      }
-    })
-    .catch((err) => console.error("Error fetching live rates:", err))
-    .finally(() => setLoading(false));
-};
+        setSilverRates([
+          { label: "990 Fine Silver (99%)", purity: "99.0% Pure Silver", rate: s99, desc: "Silver Coins & Fine Bullion" },
+          { label: "925 Sterling Silver", purity: "92.5% Hallmarked", rate: s925, desc: "Silver Fine Jewellery" },
+          { label: "83.5 Silver", purity: "83.5% Fine", rate: s835, desc: "Articles & Utensils" },
+          { label: "800 Silver (80%)", purity: "80.0% Purity", rate: s80, desc: "Payal & Traditional Wear" },
+          { label: "750 Silver (75%)", purity: "75.0% Purity", rate: s75, desc: "Ornaments & Crafts" },
+        ]);
+
+        const rawSource = data.source || data.rates?.source;
+        if (rawSource) setSource(rawSource);
+
+        const rawUpdatedAt = data.updatedAt || data.rates?.updatedAt;
+        if (rawUpdatedAt) {
+          setUpdatedAt(new Date(rawUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+        }
+      })
+      .catch((err) => console.error("Error fetching live rates:", err))
+      .finally(() => setLoading(false));
+  };
 
   useEffect(() => {
     fetchRates();
@@ -143,8 +155,10 @@ export function LiveRatesPage() {
                     <p className="text-xs text-[color:var(--muted-foreground)]">{item.purity} · {item.desc}</p>
                   </div>
                   <div className="text-right">
-                    <span className="text-lg font-bold text-[color:var(--espresso)]">{formatINR(item.rate)}</span>
-                    <span className="text-xs text-[color:var(--muted-foreground)] block">/ gram</span>
+                    <span className="text-lg font-sans font-semibold text-[color:var(--espresso)] tracking-normal">
+                      {formatINR(item.rate)}
+                    </span>
+                    <span className="text-xs font-sans text-[color:var(--muted-foreground)] block">/ gram</span>
                   </div>
                 </div>
               ))}
@@ -171,8 +185,10 @@ export function LiveRatesPage() {
                     <p className="text-xs text-[color:var(--muted-foreground)]">{item.purity} · {item.desc}</p>
                   </div>
                   <div className="text-right">
-                    <span className="text-lg font-bold text-[color:var(--espresso)]">{formatINR(item.rate)}</span>
-                    <span className="text-xs text-[color:var(--muted-foreground)] block">/ gram</span>
+                    <span className="text-lg font-sans font-semibold text-[color:var(--espresso)] tracking-normal">
+                      {formatINR(item.rate)}
+                    </span>
+                    <span className="text-xs font-sans text-[color:var(--muted-foreground)] block">/ gram</span>
                   </div>
                 </div>
               ))}
