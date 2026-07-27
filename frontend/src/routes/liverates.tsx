@@ -29,50 +29,50 @@ export function LiveRatesPage() {
   const [silverRates, setSilverRates] = useState<{ label: string; purity: string; rate: number; desc: string }[]>([]);
 
   const fetchRates = () => {
-    setLoading(true);
-    fetch("https://suvarnagold-16e5.vercel.app/api/rates")
-      .then((res) => res.json())
-      .then((data: LiveRatesResponse) => {
-        if (data.rates) {
-          const g = data.rates.gold || {};
-          const s = data.rates.silver || {};
+  setLoading(true);
+  fetch("https://suvarnagold-16e5.vercel.app/api/rates")
+    .then((res) => res.json())
+    .then((data) => {
+      // Helper to parse ₹ strings or numbers
+      const parseVal = (v: any) =>
+        typeof v === "number" ? v : Number(String(v ?? 0).replace(/[₹,]/g, ""));
 
-          // Extract base values
-          const g24 = g["24K"] ?? 14493;
-          const g22 = g["22K"] ?? Math.round(g24 * (22 / 24));
-          const g18 = g["18K"] ?? Math.round(g24 * (18 / 24));
-          const g14 = g["14K"] ?? Math.round(g24 * (14 / 24));
-          const g9 = g["9K"] ?? Math.round(g24 * (9 / 24));
+      // Extract base rates from response
+      const g24 = parseVal(data.gold24) || 14493;
+      const g22 = parseVal(data.gold22) || Math.round(g24 * (22 / 24));
+      const g18 = parseVal(data.gold18) || Math.round(g24 * (18 / 24));
+      const g14 = Math.round(g24 * (14 / 24));
+      const g9 = Math.round(g24 * (9 / 24));
 
-          const s925 = s["92.5"] ?? 222;
-          const s835 = s["83.5"] ?? Math.round(s925 * (83.5 / 92.5));
-          const s80 = s["80"] ?? Math.round(s925 * (80 / 92.5));
-          const s75 = s["75"] ?? Math.round(s925 * (75 / 92.5));
+      const silverBase = parseVal(data.silver) || 240; // ~999 fine silver base
+      const s925 = Math.round(silverBase * 0.925);
+      const s835 = Math.round(silverBase * 0.835);
+      const s80 = Math.round(silverBase * 0.80);
+      const s75 = Math.round(silverBase * 0.75);
 
-          setGoldRates([
-            { label: "24K Gold", purity: "99.9% Pure Gold", rate: g24, desc: "Bullion & Gold Coins" },
-            { label: "22K Gold", purity: "91.6% BIS Hallmarked", rate: g22, desc: "Traditional Jewellery" },
-            { label: "18K Gold", purity: "75.0% Hallmarked", rate: g18, desc: "Diamond & Modern Gold" },
-            { label: "14K Gold", purity: "58.3% Pure Gold", rate: g14, desc: "Lightweight Jewellery" },
-            { label: "9K Gold", purity: "37.5% Pure Gold", rate: g9, desc: "Budget / Daily Wear" },
-          ]);
+      setGoldRates([
+        { label: "24K Gold", purity: "99.9% Pure Gold", rate: g24, desc: "Bullion & Gold Coins" },
+        { label: "22K Gold", purity: "91.6% BIS Hallmarked", rate: g22, desc: "Traditional Jewellery" },
+        { label: "18K Gold", purity: "75.0% Hallmarked", rate: g18, desc: "Diamond & Modern Gold" },
+        { label: "14K Gold", purity: "58.3% Pure Gold", rate: g14, desc: "Lightweight Jewellery" },
+        { label: "9K Gold", purity: "37.5% Pure Gold", rate: g9, desc: "Budget / Daily Wear" },
+      ]);
 
-          setSilverRates([
-            { label: "925 Sterling Silver", purity: "92.5% Hallmarked", rate: s925, desc: "Silver Fine Jewellery" },
-            { label: "83.5 Silver", purity: "83.5% Fine", rate: s835, desc: "Articles & Utensils" },
-            { label: "800 Silver (80%)", purity: "80.0% Purity", rate: s80, desc: "Payal & Traditional Wear" },
-            { label: "750 Silver (75%)", purity: "75.0% Purity", rate: s75, desc: "Ornaments & Crafts" },
-          ]);
+      setSilverRates([
+        { label: "925 Sterling Silver", purity: "92.5% Hallmarked", rate: s925, desc: "Silver Fine Jewellery" },
+        { label: "83.5 Silver", purity: "83.5% Fine", rate: s835, desc: "Articles & Utensils" },
+        { label: "800 Silver (80%)", purity: "80.0% Purity", rate: s80, desc: "Payal & Traditional Wear" },
+        { label: "750 Silver (75%)", purity: "75.0% Purity", rate: s75, desc: "Ornaments & Crafts" },
+      ]);
 
-          if (data.rates.source) setSource(data.rates.source);
-          if (data.rates.updatedAt) {
-            setUpdatedAt(new Date(data.rates.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-          }
-        }
-      })
-      .catch((err) => console.error("Error fetching live rates:", err))
-      .finally(() => setLoading(false));
-  };
+      if (data.source) setSource(data.source);
+      if (data.updatedAt) {
+        setUpdatedAt(new Date(data.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      }
+    })
+    .catch((err) => console.error("Error fetching live rates:", err))
+    .finally(() => setLoading(false));
+};
 
   useEffect(() => {
     fetchRates();
