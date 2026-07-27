@@ -262,8 +262,8 @@ function LiveRatesBar() {
             <span className="text-xs text-[color:var(--muted-foreground)]">Loading rates...</span>
           )}
         </div>
-        <Link 
-  to={"/liveRates" as any} 
+       <Link 
+  to={"/liverates" as any} 
   className="flex items-center gap-1.5 text-[color:var(--gold-dark)] font-semibold text-xs hover:underline transition-all"
 >
   <RefreshCw className="w-3.5 h-3.5" /> View details
