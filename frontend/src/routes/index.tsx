@@ -263,7 +263,7 @@ function LiveRatesBar() {
           )}
         </div>
        <Link 
-  to={"/liverates" as any} 
+  to="/liverates" 
   className="flex items-center gap-1.5 text-[color:var(--gold-dark)] font-semibold text-xs hover:underline transition-all"
 >
   <RefreshCw className="w-3.5 h-3.5" /> View details

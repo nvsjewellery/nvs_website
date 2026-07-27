@@ -1,7 +1,13 @@
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { OrnamentalDivider } from "@/components/OrnamentalDivider";
 import { formatINR } from "@/lib/store";
+
+// 1. ADD THIS ROUTE EXPORT:
+export const Route = createFileRoute("/liverates")({
+  component: LiveRatesPage,
+});
 
 interface LiveRatesResponse {
   success?: boolean;
