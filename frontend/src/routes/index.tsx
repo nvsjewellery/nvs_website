@@ -16,7 +16,6 @@ import catChains from "@/assets/cat-chains.jpg";
 
 export const Route = createFileRoute("/")({ component: Home });
 
-// Hero Carousel Definition
 const HERO_SLIDES = [
   {
     title: "Everyday Gold,",
@@ -49,14 +48,14 @@ const METALS = [
   { name: "Silver", grad: "linear-gradient(135deg,#e8e8ea,#a8a8ac)" },
 ];
 
-// Featured Grid (Pendants removed, grid updated to 6 items)
+// Clean 6-item layout without awkward column spans
 const FEATURED = [
-  { name: "Necklaces", tag: "Handcrafted heirlooms", img: catNecklaces, span: "lg:col-span-2 lg:row-span-2" },
-  { name: "Bangles", tag: "Stacked in tradition", img: catBangles, span: "" },
-  { name: "Rings", tag: "Sparkling promises", img: catRings, span: "" },
-  { name: "Earrings", tag: "Jhumkas & drops", img: catEarrings, span: "lg:col-span-2" },
-  { name: "Mangalsutra", tag: "Sacred bonds", img: catMangalsutra, span: "" },
-  { name: "Chains", tag: "Everyday classics", img: catChains, span: "" },
+  { name: "Necklaces", tag: "Handcrafted heirlooms", img: catNecklaces },
+  { name: "Bangles", tag: "Stacked in tradition", img: catBangles },
+  { name: "Rings", tag: "Sparkling promises", img: catRings },
+  { name: "Earrings", tag: "Jhumkas & drops", img: catEarrings },
+  { name: "Mangalsutra", tag: "Sacred bonds", img: catMangalsutra },
+  { name: "Chains", tag: "Everyday classics", img: catChains },
 ];
 
 const QUICK_TYPES = ["Rings", "Chains", "Earrings", "Bangles", "Necklaces", "Bracelets", "Mangalsutra"];
@@ -84,14 +83,14 @@ function Home() {
     return () => { cancelled = true; };
   }, []);
 
-  const trending = goldProducts.filter((p) => p.sub.toLowerCase() === tab.toLowerCase()).slice(0, 4);
+  const trending = goldProducts.filter((p) => p.sub?.toLowerCase() === tab.toLowerCase()).slice(0, 4);
   const explore = goldProducts.filter((p) => ["Necklaces", "Bangles", "Rings", "Earrings", "Chains"].includes(p.sub)).slice(0, 8);
   const bridalPicks = goldProducts.filter((p) => p.sub === "Necklaces" || p.sub === "Mangalsutra").slice(0, 5);
 
   return (
     <Layout>
       {/* Hero Carousel Banner */}
-      <section className="relative h-[80vh] min-h-[520px] max-h-[720px] overflow-hidden bg-black">
+      <section className="relative h-[75vh] min-h-[480px] max-h-[680px] overflow-hidden bg-black">
         {HERO_SLIDES.map((slide, idx) => (
           <div
             key={slide.title}
@@ -148,15 +147,16 @@ function Home() {
 
       <OrnamentalDivider />
 
+      {/* Shop by Metal */}
       <section className="max-w-7xl mx-auto px-4">
         <div className="text-center mb-10">
           <p className="label-caps text-[color:var(--gold-dark)] text-xs">Choose Your Metal</p>
-          <h2 className="font-serif text-4xl md:text-5xl mt-2 text-[color:var(--espresso)]">Shop by Metal</h2>
+          <h2 className="font-serif text-3xl md:text-4xl mt-1 text-[color:var(--espresso)]">Shop by Metal</h2>
         </div>
-        <div className="grid grid-cols-2 gap-4 max-w-xl mx-auto">
+        <div className="grid grid-cols-2 gap-6 max-w-lg mx-auto">
           {METALS.map((m) => (
             <Link key={m.name} to={`/${metalSlug(m.name)}` as string} className="bg-white border border-[color:var(--border)] rounded-2xl p-6 text-center hover:border-[color:var(--gold)] hover:shadow-md transition group">
-              <div className="w-24 h-24 mx-auto rounded-full shadow-inner" style={{ background: m.grad }} />
+              <div className="w-20 h-20 mx-auto rounded-full shadow-inner" style={{ background: m.grad }} />
               <h3 className="font-serif text-lg mt-4 text-[color:var(--espresso)]">{m.name}</h3>
               <span className="label-caps text-[10px] text-[color:var(--gold-dark)] mt-2 inline-flex items-center gap-1 group-hover:gap-2 transition-all">Explore <ArrowRight className="w-3 h-3" /></span>
             </Link>
@@ -166,26 +166,36 @@ function Home() {
 
       <OrnamentalDivider />
 
-      {/* Featured Categories - Links directly to specific Gold subcategory */}
+      {/* Featured Categories: Clean 3-column Grid Layout */}
       <section className="max-w-7xl mx-auto px-4">
         <div className="text-center mb-10">
           <p className="label-caps text-[color:var(--gold-dark)] text-xs">Signature Edits</p>
-          <h2 className="font-serif text-4xl md:text-5xl mt-2 text-[color:var(--espresso)]">Featured Categories</h2>
+          <h2 className="font-serif text-3xl md:text-4xl mt-1 text-[color:var(--espresso)]">Featured Categories</h2>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-3 auto-rows-[200px] md:auto-rows-[240px] gap-4">
+        
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-5 md:gap-6">
           {FEATURED.map((f) => (
             <Link 
               key={f.name} 
               to="/gold" 
               search={{ cat: f.name }}
-              className={`relative rounded-2xl overflow-hidden group ${f.span}`}
+              className="group relative rounded-2xl overflow-hidden aspect-[4/3] bg-neutral-900 border border-[color:var(--border)] shadow-sm hover:shadow-md transition-all duration-300"
             >
-              <img src={f.img} alt={f.name} loading="lazy" className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition duration-700" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-              <div className="absolute bottom-0 left-0 right-0 p-5">
-                <h3 className="font-serif text-white text-2xl md:text-3xl">{f.name}</h3>
-                <p className="text-white/80 text-xs mt-1">{f.tag}</p>
-                <span className="pill-gold text-xs mt-3 !py-1.5 !px-3 inline-flex">Shop Now <ArrowRight className="w-3 h-3" /></span>
+              <img 
+                src={f.img} 
+                alt={f.name} 
+                loading="lazy" 
+                className="absolute inset-0 w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500 ease-out" 
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent" />
+              <div className="absolute bottom-0 left-0 right-0 p-4 md:p-6 text-left flex flex-col justify-end">
+                <h3 className="font-serif text-white text-xl md:text-2xl font-normal leading-snug">{f.name}</h3>
+                <p className="text-white/75 text-xs mt-0.5 line-clamp-1">{f.tag}</p>
+                <div className="mt-3">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[color:var(--gold)] group-hover:translate-x-1 transition-transform uppercase tracking-wider">
+                    Shop Collection <ArrowRight className="w-3 h-3" />
+                  </span>
+                </div>
               </div>
             </Link>
           ))}
@@ -194,36 +204,38 @@ function Home() {
 
       <OrnamentalDivider />
 
+      {/* Trending Section */}
       <section className="max-w-7xl mx-auto px-4">
-        <div style={{ backgroundColor: "var(--panel)" }} className="rounded-3xl p-8 md:p-12">
+        <div style={{ backgroundColor: "var(--panel)" }} className="rounded-3xl p-6 md:p-10 border border-[color:var(--border)]">
           <div className="text-center mb-8">
             <p className="label-caps text-[color:var(--gold-dark)] text-xs">Curated Favourites</p>
-            <h2 className="font-serif text-4xl md:text-5xl mt-2 text-[color:var(--espresso)]">Trending in Gold</h2>
-            <p className="text-[color:var(--muted-foreground)] mt-2">Handpicked bestsellers this season</p>
+            <h2 className="font-serif text-3xl md:text-4xl mt-1 text-[color:var(--espresso)]">Trending in Gold</h2>
+            <p className="text-[color:var(--muted-foreground)] text-xs mt-1">Handpicked bestsellers this season</p>
           </div>
           <div className="flex flex-wrap gap-2 justify-center mb-8">
-            {["Rings","Necklaces","Earrings","Bangles","Chains"].map((t) => (
+            {["Rings", "Necklaces", "Earrings", "Bangles", "Chains"].map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition ${
+                className={`px-4 py-1.5 rounded-full text-xs font-medium transition ${
                   tab === t ? "bg-[color:var(--gold)] text-white" : "bg-white border border-[color:var(--border)] text-[color:var(--espresso)] hover:border-[color:var(--gold)]"
                 }`}
               >{t}</button>
             ))}
           </div>
+
           {loading ? (
-            <div className="text-center py-10 text-[color:var(--muted-foreground)]">Loading...</div>
+            <div className="text-center py-10 text-xs text-[color:var(--muted-foreground)]">Loading products...</div>
           ) : trending.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {trending.map((p) => (
                 <ProductCard key={p.id} p={p} />
               ))}
             </div>
           ) : (
-            <div className="text-center py-12 bg-white/60 rounded-2xl border border-[color:var(--border)]">
-              <p className="text-[color:var(--espresso)] font-serif text-lg">Products will be available soon!</p>
-              <p className="text-xs text-[color:var(--muted-foreground)] mt-1">We are currently curating new design additions for {tab}.</p>
+            <div className="text-center py-10 bg-white/80 rounded-2xl border border-[color:var(--border)] max-w-md mx-auto p-4">
+              <p className="text-[color:var(--espresso)] font-serif text-base">Products will be available soon!</p>
+              <p className="text-xs text-[color:var(--muted-foreground)] mt-1">We are updating new handcrafted designs for {tab}.</p>
             </div>
           )}
         </div>
@@ -235,34 +247,33 @@ function Home() {
         <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
           <div>
             <p className="label-caps text-[color:var(--gold-dark)] text-xs">Discover</p>
-            <h2 className="font-serif text-4xl mt-2 text-[color:var(--espresso)]">Explore Our Categories</h2>
-            <p className="text-[color:var(--muted-foreground)] mt-1">Browse across metals and styles</p>
+            <h2 className="font-serif text-3xl md:text-4xl mt-1 text-[color:var(--espresso)]">Explore Our Categories</h2>
           </div>
-          <Link to="/gold" className="pill-gold-outline">View All <ArrowRight className="w-4 h-4" /></Link>
+          <Link to="/gold" className="pill-gold-outline text-xs">View All <ArrowRight className="w-3.5 h-3.5" /></Link>
         </div>
         {!loading && (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {explore.map((p) => <ProductCard key={p.id} p={p} />)}
             {explore.length === 0 && (
-              <p className="col-span-full text-center text-[color:var(--muted-foreground)] py-6">Products will be available soon!</p>
+              <p className="col-span-full text-center text-xs text-[color:var(--muted-foreground)] py-6">Products will be available soon!</p>
             )}
           </div>
         )}
       </section>
 
-      {/* Quick Shop section - Direct link to subcategory query parameter */}
-      <section className="max-w-7xl mx-auto px-4 mt-16">
+      {/* Quick Shop Types */}
+      <section className="max-w-7xl mx-auto px-4 mt-12">
         <div className="text-center mb-8">
           <p className="label-caps text-[color:var(--gold-dark)] text-xs">Quick Shop</p>
-          <h2 className="font-serif text-4xl mt-2 text-[color:var(--espresso)]">Shop by Type</h2>
+          <h2 className="font-serif text-3xl md:text-4xl mt-1 text-[color:var(--espresso)]">Shop by Type</h2>
         </div>
         <div className="flex gap-6 overflow-x-auto pb-4 justify-start md:justify-center">
           {QUICK_TYPES.map((t, i) => {
             const img = [catRings, catChains, catEarrings, catBangles, catNecklaces, catChains, catMangalsutra][i];
             return (
               <Link key={t} to="/gold" search={{ cat: t }} className="text-center shrink-0 group">
-                <div className="w-20 h-20 md:w-24 md:h-24 rounded-full border-2 border-[color:var(--gold)]/50 overflow-hidden group-hover:border-[color:var(--gold)] transition">
-                  <img src={img} alt={t} loading="lazy" className="w-full h-full object-cover" />
+                <div className="w-20 h-20 md:w-24 md:h-24 rounded-full border-2 border-[color:var(--gold)]/40 p-0.5 group-hover:border-[color:var(--gold)] transition duration-300">
+                  <img src={img} alt={t} loading="lazy" className="w-full h-full object-cover rounded-full" />
                 </div>
                 <div className="mt-2 text-xs font-medium text-[color:var(--espresso)]">{t}</div>
               </Link>
@@ -274,16 +285,15 @@ function Home() {
       <OrnamentalDivider />
 
       {!loading && bridalPicks.length > 0 && (
-        <section className="max-w-7xl mx-auto px-4">
+        <section className="max-w-7xl mx-auto px-4 mb-12">
           <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
             <div>
               <p className="label-caps text-[color:var(--gold-dark)] text-xs">NVS Picks</p>
-              <h2 className="font-serif text-4xl mt-2 text-[color:var(--espresso)]">Bridal Collection Picks</h2>
-              <p className="text-[color:var(--muted-foreground)] mt-1">For your most sacred day</p>
+              <h2 className="font-serif text-3xl md:text-4xl mt-1 text-[color:var(--espresso)]">Bridal Collection Picks</h2>
             </div>
-            <Link to="/gold" className="text-[color:var(--gold-dark)] font-semibold text-sm inline-flex items-center gap-1">View All <ArrowRight className="w-4 h-4" /></Link>
+            <Link to="/gold" className="text-[color:var(--gold-dark)] font-semibold text-xs inline-flex items-center gap-1">View All <ArrowRight className="w-3.5 h-3.5" /></Link>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-5">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             {bridalPicks.map((p) => <SimpleProductCard key={p.id} p={p} />)}
           </div>
         </section>
