@@ -12,6 +12,7 @@ export const Route = createFileRoute("/product/$id")({
   loader: async ({ params }) => {
     try {
       const p = await productsApi.getById(params.id);
+      if (!p) throw notFound();
       return p;
     } catch {
       throw notFound();
@@ -20,15 +21,15 @@ export const Route = createFileRoute("/product/$id")({
 });
 
 function ProductPage() {
-  const p = Route.useLoaderData();
+  const p = Route.useLoaderData() as any; // Cast as any to guarantee all raw backend fields are accessible
   const [qty, setQty] = useState(1);
   const wishlist = useStore((s) => s.wishlist);
-  const saved = wishlist.includes(p.id);
+  const saved = wishlist.includes(p?.id);
 
   const bd = computeBreakdown(p.weight, p.purity);
 
-  // Safely extract description from admin/backend response (description or desc)
-  const productDescription = (p as any)?.description || (p as any)?.desc;
+  // Checks description, desc, and details fields from admin/backend response
+  const rawDesc = (p?.description || p?.desc || p?.details || "").trim();
 
   return (
     <Layout>
@@ -102,12 +103,10 @@ function ProductPage() {
             </button>
           </div>
 
-          {/* Dynamic Description Sync */}
+          {/* Description Section */}
           <div className="mt-8 pt-6 border-t border-[color:var(--border)]">
             <p className="text-sm text-[color:var(--muted-foreground)] leading-relaxed whitespace-pre-line">
-              {productDescription
-                ? productDescription
-                : `${p.name} — crafted in ${p.purity} ${p.metal.toLowerCase()} weighing ${p.weight}g. Traditional hand-finishing with heritage techniques. Each piece is inspected for symmetry, polish and stone setting before dispatch.`}
+              {rawDesc || `${p.name} — crafted in ${p.purity} ${p.metal?.toLowerCase()} weighing ${p.weight}g. Traditional hand-finishing with heritage techniques.`}
             </p>
           </div>
         </div>
