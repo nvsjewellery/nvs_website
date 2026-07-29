@@ -70,22 +70,22 @@ function ProductPage() {
 
           {/* Render thumbnails ONLY if there are multiple unique images */}
           {productImages.length > 1 && (
-            <div className="grid grid-cols-4 gap-3 mt-3">
-              {productImages.map((imgUrl: string, i: number) => (
-                <div
-                  key={i}
-                  onClick={() => setSelectedImg(imgUrl)}
-                  className={`aspect-square bg-[color:var(--panel)] rounded-lg overflow-hidden border cursor-pointer transition-colors ${
-                    currentImage === imgUrl
-                      ? "border-[color:var(--gold)] ring-1 ring-[color:var(--gold)]"
-                      : "border-[color:var(--border)] hover:border-[color:var(--gold)]"
-                  }`}
-                >
-                  <img src={imgUrl} alt="" className="w-full h-full object-cover" />
-                </div>
-              ))}
-            </div>
-          )}
+  <div className="grid grid-cols-4 gap-3 mt-3">
+    {productImages.map((imgUrl, i) => (
+      <div
+        key={i}
+        onClick={() => setSelectedImg(String(imgUrl))}
+        className={`aspect-square bg-[color:var(--panel)] rounded-lg overflow-hidden border cursor-pointer transition-colors ${
+          currentImage === imgUrl
+            ? "border-[color:var(--gold)] ring-1 ring-[color:var(--gold)]"
+            : "border-[color:var(--border)] hover:border-[color:var(--gold)]"
+        }`}
+      >
+        <img src={String(imgUrl)} alt="" className="w-full h-full object-cover" />
+      </div>
+    ))}
+  </div>
+)}
         </div>
 
         <div>
