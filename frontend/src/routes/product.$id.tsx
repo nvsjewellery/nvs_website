@@ -27,6 +27,9 @@ function ProductPage() {
 
   const bd = computeBreakdown(p.weight, p.purity);
 
+  // Safely extract description from admin/backend response (description or desc)
+  const productDescription = (p as any)?.description || (p as any)?.desc;
+
   return (
     <Layout>
       <div className="max-w-7xl mx-auto px-4 py-6 text-xs label-caps text-[color:var(--gold-dark)]">
@@ -99,9 +102,12 @@ function ProductPage() {
             </button>
           </div>
 
+          {/* Dynamic Description Sync */}
           <div className="mt-8 pt-6 border-t border-[color:var(--border)]">
-            <p className="text-sm text-[color:var(--muted-foreground)] leading-relaxed">
-              {p.name} — crafted in {p.purity} {p.metal.toLowerCase()} weighing {p.weight}g. Traditional hand-finishing with heritage techniques. Each piece is inspected for symmetry, polish and stone setting before dispatch.
+            <p className="text-sm text-[color:var(--muted-foreground)] leading-relaxed whitespace-pre-line">
+              {productDescription
+                ? productDescription
+                : `${p.name} — crafted in ${p.purity} ${p.metal.toLowerCase()} weighing ${p.weight}g. Traditional hand-finishing with heritage techniques. Each piece is inspected for symmetry, polish and stone setting before dispatch.`}
             </p>
           </div>
         </div>
