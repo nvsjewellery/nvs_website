@@ -48,7 +48,6 @@ const METALS = [
   { name: "Silver", grad: "linear-gradient(135deg,#e8e8ea,#a8a8ac)" },
 ];
 
-// Clean 6-item layout without awkward column spans
 const FEATURED = [
   { name: "Necklaces", tag: "Handcrafted heirlooms", img: catNecklaces },
   { name: "Bangles", tag: "Stacked in tradition", img: catBangles },
@@ -58,12 +57,15 @@ const FEATURED = [
   { name: "Chains", tag: "Everyday classics", img: catChains },
 ];
 
-const QUICK_TYPES = ["Rings", "Chains", "Earrings", "Bangles", "Necklaces", "Bracelets", "Mangalsutra"];
-
 function Home() {
-  const [tab, setTab] = useState("Rings");
+  const [goldTab, setGoldTab] = useState("Rings");
+  const [silverTab, setSilverTab] = useState("Rings");
+  
   const [goldProducts, setGoldProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [silverProducts, setSilverProducts] = useState<Product[]>([]);
+  const [loadingGold, setLoadingGold] = useState(true);
+  const [loadingSilver, setLoadingSilver] = useState(true);
+  
   const [currentSlide, setCurrentSlide] = useState(0);
 
   useEffect(() => {
@@ -73,17 +75,31 @@ function Home() {
     return () => clearInterval(timer);
   }, []);
 
+  // Fetch Gold Products
   useEffect(() => {
     let cancelled = false;
     productsApi
       .getByMetal("Gold")
       .then((data) => { if (!cancelled) setGoldProducts(data as Product[]); })
       .catch(() => { if (!cancelled) setGoldProducts([]); })
-      .finally(() => { if (!cancelled) setLoading(false); });
+      .finally(() => { if (!cancelled) setLoadingGold(false); });
     return () => { cancelled = true; };
   }, []);
 
-  const trending = goldProducts.filter((p) => p.sub?.toLowerCase() === tab.toLowerCase()).slice(0, 4);
+  // Fetch Silver Products
+  useEffect(() => {
+    let cancelled = false;
+    productsApi
+      .getByMetal("Silver")
+      .then((data) => { if (!cancelled) setSilverProducts(data as Product[]); })
+      .catch(() => { if (!cancelled) setSilverProducts([]); })
+      .finally(() => { if (!cancelled) setLoadingSilver(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const goldTrending = goldProducts.filter((p) => p.sub?.toLowerCase() === goldTab.toLowerCase()).slice(0, 4);
+  const silverTrending = silverProducts.filter((p) => p.sub?.toLowerCase() === silverTab.toLowerCase()).slice(0, 4);
+
   const explore = goldProducts.filter((p) => ["Necklaces", "Bangles", "Rings", "Earrings", "Chains"].includes(p.sub)).slice(0, 8);
   const bridalPicks = goldProducts.filter((p) => p.sub === "Necklaces" || p.sub === "Mangalsutra").slice(0, 5);
 
@@ -166,7 +182,7 @@ function Home() {
 
       <OrnamentalDivider />
 
-      {/* Featured Categories: Clean 3-column Grid Layout */}
+      {/* Featured Categories */}
       <section className="max-w-7xl mx-auto px-4">
         <div className="text-center mb-10">
           <p className="label-caps text-[color:var(--gold-dark)] text-xs">Signature Edits</p>
@@ -204,7 +220,7 @@ function Home() {
 
       <OrnamentalDivider />
 
-      {/* Trending Section */}
+      {/* Trending in Gold */}
       <section className="max-w-7xl mx-auto px-4">
         <div style={{ backgroundColor: "var(--panel)" }} className="rounded-3xl p-6 md:p-10 border border-[color:var(--border)]">
           <div className="text-center mb-8">
@@ -216,26 +232,26 @@ function Home() {
             {["Rings", "Necklaces", "Earrings", "Bangles", "Chains"].map((t) => (
               <button
                 key={t}
-                onClick={() => setTab(t)}
+                onClick={() => setGoldTab(t)}
                 className={`px-4 py-1.5 rounded-full text-xs font-medium transition ${
-                  tab === t ? "bg-[color:var(--gold)] text-white" : "bg-white border border-[color:var(--border)] text-[color:var(--espresso)] hover:border-[color:var(--gold)]"
+                  goldTab === t ? "bg-[color:var(--gold)] text-white" : "bg-white border border-[color:var(--border)] text-[color:var(--espresso)] hover:border-[color:var(--gold)]"
                 }`}
               >{t}</button>
             ))}
           </div>
 
-          {loading ? (
+          {loadingGold ? (
             <div className="text-center py-10 text-xs text-[color:var(--muted-foreground)]">Loading products...</div>
-          ) : trending.length > 0 ? (
+          ) : goldTrending.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {trending.map((p) => (
+              {goldTrending.map((p) => (
                 <ProductCard key={p.id} p={p} />
               ))}
             </div>
           ) : (
             <div className="text-center py-10 bg-white/80 rounded-2xl border border-[color:var(--border)] max-w-md mx-auto p-4">
               <p className="text-[color:var(--espresso)] font-serif text-base">Products will be available soon!</p>
-              <p className="text-xs text-[color:var(--muted-foreground)] mt-1">We are updating new handcrafted designs for {tab}.</p>
+              <p className="text-xs text-[color:var(--muted-foreground)] mt-1">We are updating new handcrafted designs for {goldTab}.</p>
             </div>
           )}
         </div>
@@ -243,6 +259,46 @@ function Home() {
 
       <OrnamentalDivider />
 
+      {/* Trending in Silver */}
+      <section className="max-w-7xl mx-auto px-4">
+        <div style={{ backgroundColor: "var(--panel)" }} className="rounded-3xl p-6 md:p-10 border border-[color:var(--border)]">
+          <div className="text-center mb-8">
+            <p className="label-caps text-[color:var(--gold-dark)] text-xs">Modern Sterling Classics</p>
+            <h2 className="font-serif text-3xl md:text-4xl mt-1 text-[color:var(--espresso)]">Trending in Silver</h2>
+            <p className="text-[color:var(--muted-foreground)] text-xs mt-1">Contemporary sterling silver favourites</p>
+          </div>
+          <div className="flex flex-wrap gap-2 justify-center mb-8">
+            {["Rings", "Necklaces", "Earrings", "Bangles", "Chains"].map((t) => (
+              <button
+                key={t}
+                onClick={() => setSilverTab(t)}
+                className={`px-4 py-1.5 rounded-full text-xs font-medium transition ${
+                  silverTab === t ? "bg-[color:var(--gold)] text-white" : "bg-white border border-[color:var(--border)] text-[color:var(--espresso)] hover:border-[color:var(--gold)]"
+                }`}
+              >{t}</button>
+            ))}
+          </div>
+
+          {loadingSilver ? (
+            <div className="text-center py-10 text-xs text-[color:var(--muted-foreground)]">Loading products...</div>
+          ) : silverTrending.length > 0 ? (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {silverTrending.map((p) => (
+                <ProductCard key={p.id} p={p} />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-10 bg-white/80 rounded-2xl border border-[color:var(--border)] max-w-md mx-auto p-4">
+              <p className="text-[color:var(--espresso)] font-serif text-base">Products will be available soon!</p>
+              <p className="text-xs text-[color:var(--muted-foreground)] mt-1">We are currently adding silver products for {silverTab}.</p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <OrnamentalDivider />
+
+      {/* Explore Grid */}
       <section className="max-w-7xl mx-auto px-4">
         <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
           <div>
@@ -251,7 +307,7 @@ function Home() {
           </div>
           <Link to="/gold" className="pill-gold-outline text-xs">View All <ArrowRight className="w-3.5 h-3.5" /></Link>
         </div>
-        {!loading && (
+        {!loadingGold && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {explore.map((p) => <ProductCard key={p.id} p={p} />)}
             {explore.length === 0 && (
@@ -261,30 +317,10 @@ function Home() {
         )}
       </section>
 
-      {/* Quick Shop Types */}
-      <section className="max-w-7xl mx-auto px-4 mt-12">
-        <div className="text-center mb-8">
-          <p className="label-caps text-[color:var(--gold-dark)] text-xs">Quick Shop</p>
-          <h2 className="font-serif text-3xl md:text-4xl mt-1 text-[color:var(--espresso)]">Shop by Type</h2>
-        </div>
-        <div className="flex gap-6 overflow-x-auto pb-4 justify-start md:justify-center">
-          {QUICK_TYPES.map((t, i) => {
-            const img = [catRings, catChains, catEarrings, catBangles, catNecklaces, catChains, catMangalsutra][i];
-            return (
-              <Link key={t} to="/gold" search={{ cat: t }} className="text-center shrink-0 group">
-                <div className="w-20 h-20 md:w-24 md:h-24 rounded-full border-2 border-[color:var(--gold)]/40 p-0.5 group-hover:border-[color:var(--gold)] transition duration-300">
-                  <img src={img} alt={t} loading="lazy" className="w-full h-full object-cover rounded-full" />
-                </div>
-                <div className="mt-2 text-xs font-medium text-[color:var(--espresso)]">{t}</div>
-              </Link>
-            );
-          })}
-        </div>
-      </section>
-
       <OrnamentalDivider />
 
-      {!loading && bridalPicks.length > 0 && (
+      {/* Bridal Collection Picks */}
+      {!loadingGold && bridalPicks.length > 0 && (
         <section className="max-w-7xl mx-auto px-4 mb-12">
           <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
             <div>
