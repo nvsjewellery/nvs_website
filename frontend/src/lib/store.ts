@@ -41,7 +41,7 @@ if (typeof window !== "undefined") {
         ...state,
         cart: parsed.cart ?? [],
         wishlist: parsed.wishlist ?? [],
-        user: parsed.user ?? null, // <--- Load user from localStorage
+        user: parsed.user ?? null,
       };
     }
   } catch {}
@@ -52,13 +52,12 @@ const listeners = new Set<() => void>();
 function emit() {
   if (typeof window !== "undefined") {
     try {
-      // Save cart, wishlist AND user to localStorage
       localStorage.setItem(
         KEY,
         JSON.stringify({
           cart: state.cart,
           wishlist: state.wishlist,
-          user: state.user, // <--- Persist user state
+          user: state.user,
         })
       );
     } catch {}
@@ -72,7 +71,6 @@ function subscribe(l: () => void) {
 }
 
 const getSnapshot = () => state;
-
 const SERVER_SNAPSHOT: State = { cart: [], wishlist: [], user: null, authChecked: false };
 const getServerSnapshot = () => SERVER_SNAPSHOT;
 
@@ -136,23 +134,27 @@ export const actions = {
     try {
       await api.logout();
     } finally {
-      state = { ...state, user: null };
+      state = { ...state, user: null, authChecked: true };
       emit();
     }
   },
   async checkAuth() {
     try {
       const res = await api.getMe();
-      state = { ...state, user: res.user ?? state.user, authChecked: true };
+      if (res && res.user) {
+        state = { ...state, user: res.user, authChecked: true };
+      } else {
+        // Fallback to local storage user if backend returns empty response without throwing
+        state = { ...state, authChecked: true };
+      }
     } catch {
-      // If server session invalid, clear local user state
-      state = { ...state, user: null, authChecked: true };
+      // Keep existing persisted local user if network fails or route doesn't return 401 explicitly
+      state = { ...state, authChecked: true };
     }
     emit();
   },
 };
 
-// Check backend auth status automatically on initial browser load
 if (typeof window !== "undefined") {
   actions.checkAuth();
 }

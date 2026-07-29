@@ -20,6 +20,7 @@ type Address = {
 
 export function Account() {
   const user = useStore((s) => s.user);
+  const authChecked = useStore((s) => s.authChecked);
   const wishlist = useStore((s) => s.wishlist);
   const nav = useNavigate();
 
@@ -85,6 +86,17 @@ export function Account() {
   const handleRemoveAddress = (id: string) => {
     setAddresses(addresses.filter((a) => a.id !== id));
   };
+
+  // Wait for initial check before assuming user is signed out
+  if (!user && !authChecked) {
+    return (
+      <Layout>
+        <div className="max-w-md mx-auto px-4 py-24 text-center">
+          <p className="text-sm text-[color:var(--muted-foreground)]">Loading your account...</p>
+        </div>
+      </Layout>
+    );
+  }
 
   if (!user) {
     return (
