@@ -60,6 +60,7 @@ const FEATURED = [
 ];
 
 // Robust helper to extract category from API product objects
+// Robust helper to extract category from API product objects
 function getProductCategory(p: Product): string {
   if (!p) return "";
   const raw = p as unknown as Record<string, unknown>;
@@ -67,7 +68,6 @@ function getProductCategory(p: Product): string {
     p.sub || 
     raw.subCategory || 
     raw.category || 
-    p.category || 
     ""
   ) as string;
 
