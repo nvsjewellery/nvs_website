@@ -21,22 +21,31 @@ export const Route = createFileRoute("/product/$id")({
 });
 
 function ProductPage() {
-  const p = Route.useLoaderData() as any;
+  const rawData = Route.useLoaderData() as any;
+  // Handle unwrapping in case backend sends { product: { ... } } or raw object
+  const p = rawData?.product || rawData || {};
+
   const [qty, setQty] = useState(1);
   const wishlist = useStore((s) => s.wishlist);
   const saved = wishlist.includes(p?.id);
 
+  // Extract weight and calculate breakdown
   const weightVal = Number(p?.weight ?? p?.grossWeight ?? 0);
   const bd = computeBreakdown(weightVal, p?.purity || "22K");
 
-  // Extract description string safely
-  const rawDesc = String(p?.description || p?.desc || p?.details || "").trim();
+  // Synchronize price: prioritize dynamic live calculated total, fallback to database price
+  const displayPrice = bd?.total ? bd.total : Number(p?.price || 0);
+
+  // Safely extract description string from all potential fields
+  const rawDesc = String(
+    p?.description || p?.desc || p?.details || p?.summary || ""
+  ).trim();
 
   return (
     <Layout>
       <div className="max-w-7xl mx-auto px-4 py-6 text-xs label-caps text-[color:var(--gold-dark)]">
         <Link to="/">Home</Link> <span className="mx-1">/</span>
-        <Link to={`/${metalSlug(p.metal)}` as string}>{p.metal}</Link> <span className="mx-1">/</span>
+        <Link to={`/${metalSlug(p.metal || "Gold")}` as string}>{p.metal || "Gold"}</Link> <span className="mx-1">/</span>
         <span className="text-[color:var(--espresso)]">{p.name}</span>
       </div>
 
@@ -67,8 +76,13 @@ function ProductPage() {
             <span className="text-sm text-[color:var(--muted-foreground)]">{weightVal} g</span>
           </div>
           <div className="mt-6">
-            <div className="text-4xl font-serif text-[color:var(--gold-dark)] font-bold">{formatINR(p.price)}</div>
-            <p className="text-xs text-[color:var(--muted-foreground)] mt-1">Inclusive of GST · Includes making charges</p>
+            {/* Display matched price */}
+            <div className="text-4xl font-serif text-[color:var(--gold-dark)] font-bold">
+              {formatINR(displayPrice)}
+            </div>
+            <p className="text-xs text-[color:var(--muted-foreground)] mt-1">
+              Inclusive of GST · Includes making charges
+            </p>
           </div>
 
           <div style={{ backgroundColor: "var(--panel)" }} className="rounded-2xl p-5 mt-6">
@@ -104,7 +118,7 @@ function ProductPage() {
             </button>
           </div>
 
-          {/* Dynamic Description Section */}
+          {/* Description Section */}
           <div className="mt-8 pt-6 border-t border-[color:var(--border)]">
             <p className="text-sm text-[color:var(--muted-foreground)] leading-relaxed whitespace-pre-line">
               {rawDesc.length > 0
