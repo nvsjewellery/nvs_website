@@ -30,5 +30,7 @@ export function getProduct(id: string): Product {
     price: 0,
     gemstone: "None",
     image: "",
+    description: "",
+    desc: "",
   };
 }

@@ -1,18 +1,22 @@
 import { useSyncExternalStore } from "react";
 import { api } from "@/lib/api";
 
-export type Product = {
+export interface Product {
   id: string;
   name: string;
-  metal: "Gold" | "Silver" | "Platinum" | "Diamond" | "Rose Gold";
-  sub: string;
+  metal: string;
+  sub?: string;
+  category?: string;
+  subCategory?: string;
   purity: string;
   weight: number;
   price: number;
-  gemstone: "Diamond" | "None";
+  gemstone?: string;
   image: string;
-  gallery?: string[];
-};
+  images?: string[];
+  description?: string; // Add this line
+  desc?: string;        // Add this line
+}
 
 type CartItem = { productId: string; qty: number };
 type User = { id: string; name: string; email: string };

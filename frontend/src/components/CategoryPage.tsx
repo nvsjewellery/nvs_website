@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
+import { useSearch } from "@tanstack/react-router";
 import { Layout } from "@/components/Layout";
 import { ProductCard } from "@/components/ProductCard";
-import { categoriesApi, productsApi, type Category, type ProductItem } from "@/lib/api";
+import { categoriesApi, productsApi, type Category } from "@/lib/api";
 import type { Product } from "@/lib/store";
 
 interface CategoryPageProps {
@@ -9,16 +10,41 @@ interface CategoryPageProps {
   description: string;
 }
 
+// Helper function to safely extract subcategory string from product object
+function getSubCategory(p: Product): string {
+  if (!p) return "";
+  const raw = p as unknown as Record<string, unknown>;
+  const val = (
+    p.sub || 
+    raw.subCategory || 
+    raw.category || 
+    p.category || 
+    ""
+  ) as string;
+
+  return val.trim();
+}
+
 export function CategoryPage({ metal, description }: CategoryPageProps) {
+  const searchParams = useSearch({ strict: false }) as { cat?: string };
+  const initialCat = searchParams?.cat || "All";
+
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [selectedSub, setSelectedSub] = useState<string>("All");
+  const [selectedSub, setSelectedSub] = useState<string>(initialCat);
   const [loading, setLoading] = useState(true);
+
+  // Sync selected subcategory if URL parameter changes
+  useEffect(() => {
+    if (searchParams?.cat) {
+      setSelectedSub(searchParams.cat);
+    }
+  }, [searchParams?.cat]);
 
   useEffect(() => {
     let cancelled = false;
 
-    // Fetch data (will resolve instantly if already cached in api.ts)
+    // Fetch data (will resolve instantly if cached in api.ts)
     Promise.all([
       productsApi.getByMetal(metal),
       categoriesApi.getByMetal(metal),
@@ -41,9 +67,13 @@ export function CategoryPage({ metal, description }: CategoryPageProps) {
     };
   }, [metal]);
 
-  const filteredProducts = selectedSub === "All"
-    ? products
-    : products.filter((p) => p.sub.toLowerCase() === selectedSub.toLowerCase());
+  // Safely filter products avoiding undefined property errors
+  const filteredProducts =
+    selectedSub === "All"
+      ? products
+      : products.filter(
+          (p) => getSubCategory(p).toLowerCase() === selectedSub.toLowerCase()
+        );
 
   return (
     <Layout>
@@ -64,7 +94,7 @@ export function CategoryPage({ metal, description }: CategoryPageProps) {
               <h3 className="label-caps text-xs text-[color:var(--gold-dark)] mb-3 uppercase tracking-wider font-semibold">
                 Sub-Category
               </h3>
-              
+
               <div className="space-y-1">
                 <button
                   onClick={() => setSelectedSub("All")}
@@ -104,7 +134,8 @@ export function CategoryPage({ metal, description }: CategoryPageProps) {
           <main className="md:col-span-3">
             <div className="flex items-center justify-between mb-4">
               <p className="text-xs text-[color:var(--muted-foreground)]">
-                Showing {filteredProducts.length} product{filteredProducts.length === 1 ? "" : "s"}
+                Showing {filteredProducts.length} product
+                {filteredProducts.length === 1 ? "" : "s"}
               </p>
             </div>
 
