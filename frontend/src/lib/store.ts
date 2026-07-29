@@ -10,12 +10,14 @@ export interface Product {
   subCategory?: string;
   purity: string;
   weight: number;
+  grossWeight?: number;
   price: number;
   gemstone?: string;
   image: string;
   images?: string[];
-  description?: string; // Add this line
-  desc?: string;        // Add this line
+  description?: string;
+  desc?: string;
+  details?: string;
 }
 
 type CartItem = { productId: string; qty: number };
@@ -24,7 +26,7 @@ type State = {
   cart: CartItem[];
   wishlist: string[];
   user: User | null;
-  authChecked: boolean; // true once we've asked the backend "am I logged in?"
+  authChecked: boolean;
 };
 
 const KEY = "nvs-store-v1";
@@ -127,7 +129,6 @@ export const actions = {
   },
 };
 
-// Live rates in ₹/gram (Accurate proportions relative to 24K @ ₹14,493/g)
 export let LIVE_RATES: Record<string, number> = {
   "24K": 14493,
   "22K": 13285,
@@ -138,14 +139,12 @@ export let LIVE_RATES: Record<string, number> = {
   "92.5": 222,
 };
 
-// Call this when fetching rates from backend /api/rates
 export function setLiveRates(newRates: Record<string, number>) {
   LIVE_RATES = { ...LIVE_RATES, ...newRates };
   emit();
 }
 
 export function computeBreakdown(weight: number, purity: string, makingPct = 12, gstPct = 3) {
-  // Use correct purity rate or fallback proportionally based on 24K
   const base24K = LIVE_RATES["24K"] ?? 14493;
   let rate = LIVE_RATES[purity];
 
@@ -157,7 +156,7 @@ export function computeBreakdown(weight: number, purity: string, makingPct = 12,
     else rate = base24K;
   }
 
-  const metalValue = Math.round(weight * rate);
+  const metalValue = Math.round((weight || 0) * rate);
   const making = Math.round(metalValue * (makingPct / 100));
   const subtotal = metalValue + making;
   const gst = Math.round(subtotal * (gstPct / 100));
@@ -166,5 +165,5 @@ export function computeBreakdown(weight: number, purity: string, makingPct = 12,
 }
 
 export function formatINR(n: number) {
-  return "₹" + n.toLocaleString("en-IN");
+  return "₹" + (n || 0).toLocaleString("en-IN");
 }

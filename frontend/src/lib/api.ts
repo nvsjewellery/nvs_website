@@ -27,12 +27,17 @@ export interface ProductItem {
   id: string;
   name: string;
   metal: string;
-  sub: string;
+  sub?: string;
+  category?: string;
   purity: string;
-  weight: number;
+  weight?: number;
+  grossWeight?: number;
   price: number;
-  gemstone: string;
+  gemstone?: string;
   image: string;
+  description?: string;
+  desc?: string;
+  details?: string;
 }
 
 // In-memory cache store
@@ -83,7 +88,6 @@ export const api = {
 
 export const productsApi = {
   getByMetal: async (metal: "Gold" | "Silver") => {
-    // Return cached data immediately if available
     if (cache.products.has(metal)) {
       return cache.products.get(metal)!;
     }
@@ -92,8 +96,8 @@ export const productsApi = {
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || "Failed to load products");
     
-    const products = data.products as ProductItem[];
-    cache.products.set(metal, products); // Cache the result
+    const products = (data.products || data) as ProductItem[];
+    cache.products.set(metal, products);
     return products;
   },
 
@@ -101,13 +105,19 @@ export const productsApi = {
     const res = await fetch(`${API_URL}/products/${id}`, { credentials: "include" });
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || "Product not found");
-    return data.product as ProductItem;
+    
+    // Normalize response whether backend nests inside data.product or returns directly
+    const rawProduct = data.product || data;
+    return {
+      ...rawProduct,
+      weight: rawProduct.weight ?? rawProduct.grossWeight ?? 0,
+      description: rawProduct.description ?? rawProduct.desc ?? rawProduct.details ?? "",
+    } as ProductItem;
   },
 };
 
 export const categoriesApi = {
   getByMetal: async (metal: "Gold" | "Silver") => {
-    // Return cached data immediately if available
     if (cache.categories.has(metal)) {
       return cache.categories.get(metal)!;
     }
@@ -117,12 +127,11 @@ export const categoriesApi = {
     if (!res.ok) throw new Error(data.message || "Failed to load categories");
     
     const categories = (data.categories || data) as Category[];
-    cache.categories.set(metal, categories); // Cache the result
+    cache.categories.set(metal, categories);
     return categories;
   },
 };
 
-// Optional: call this when admin updates or creates products/categories to clear cache
 export function clearApiCache() {
   cache.products.clear();
   cache.categories.clear();

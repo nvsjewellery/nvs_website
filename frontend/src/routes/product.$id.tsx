@@ -21,15 +21,16 @@ export const Route = createFileRoute("/product/$id")({
 });
 
 function ProductPage() {
-  const p = Route.useLoaderData() as any; // Cast as any to guarantee all raw backend fields are accessible
+  const p = Route.useLoaderData() as any;
   const [qty, setQty] = useState(1);
   const wishlist = useStore((s) => s.wishlist);
   const saved = wishlist.includes(p?.id);
 
-  const bd = computeBreakdown(p.weight, p.purity);
+  const weightVal = Number(p?.weight ?? p?.grossWeight ?? 0);
+  const bd = computeBreakdown(weightVal, p?.purity || "22K");
 
-  // Checks description, desc, and details fields from admin/backend response
-  const rawDesc = (p?.description || p?.desc || p?.details || "").trim();
+  // Extract description string safely
+  const rawDesc = String(p?.description || p?.desc || p?.details || "").trim();
 
   return (
     <Layout>
@@ -58,12 +59,12 @@ function ProductPage() {
 
         <div>
           <p className="label-caps text-[color:var(--gold-dark)] text-xs">
-            {p.metal} · {p.sub}
+            {p.metal} · {p.sub || p.category}
           </p>
           <h1 className="font-serif text-4xl md:text-5xl mt-2 text-[color:var(--espresso)]">{p.name}</h1>
           <div className="flex items-center gap-3 mt-4">
             <span className="pill-gold-outline !py-1 !px-3 text-xs">{p.purity}</span>
-            <span className="text-sm text-[color:var(--muted-foreground)]">{p.weight} g</span>
+            <span className="text-sm text-[color:var(--muted-foreground)]">{weightVal} g</span>
           </div>
           <div className="mt-6">
             <div className="text-4xl font-serif text-[color:var(--gold-dark)] font-bold">{formatINR(p.price)}</div>
@@ -72,7 +73,7 @@ function ProductPage() {
 
           <div style={{ backgroundColor: "var(--panel)" }} className="rounded-2xl p-5 mt-6">
             <p className="label-caps text-[color:var(--gold-dark)] text-[10px] mb-3">Live Price Breakdown</p>
-            <BreakdownRow l={`Metal value (${p.weight}g @ ${p.purity})`} v={bd.metalValue} />
+            <BreakdownRow l={`Metal value (${weightVal}g @ ${p.purity})`} v={bd.metalValue} />
             <BreakdownRow l={`Making charges (${bd.makingPct}%)`} v={bd.making} />
             <BreakdownRow l={`GST (${bd.gstPct}%)`} v={bd.gst} />
             <div className="h-px bg-[color:var(--gold)]/30 my-3" />
@@ -103,10 +104,12 @@ function ProductPage() {
             </button>
           </div>
 
-          {/* Description Section */}
+          {/* Dynamic Description Section */}
           <div className="mt-8 pt-6 border-t border-[color:var(--border)]">
             <p className="text-sm text-[color:var(--muted-foreground)] leading-relaxed whitespace-pre-line">
-              {rawDesc || `${p.name} — crafted in ${p.purity} ${p.metal?.toLowerCase()} weighing ${p.weight}g. Traditional hand-finishing with heritage techniques.`}
+              {rawDesc.length > 0
+                ? rawDesc
+                : `${p.name} — crafted in ${p.purity} ${p.metal?.toLowerCase()} weighing ${weightVal}g. Traditional hand-finishing with heritage techniques.`}
             </p>
           </div>
         </div>
