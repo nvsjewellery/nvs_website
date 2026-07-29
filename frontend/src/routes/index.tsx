@@ -61,6 +61,12 @@ const FEATURED = [
 
 const DEFAULT_CATEGORIES = ["Rings", "Necklaces", "Earrings", "Bangles", "Chains"];
 
+// Helper function to safely read category or sub field across different API formats without TypeScript errors
+function getProductCategory(p: Product): string {
+  const raw = (p as unknown as Record<string, string>);
+  return (p.sub || raw.category || "").trim();
+}
+
 function Home() {
   const [goldProducts, setGoldProducts] = useState<Product[]>([]);
   const [silverProducts, setSilverProducts] = useState<Product[]>([]);
@@ -101,25 +107,17 @@ function Home() {
     return () => { cancelled = true; };
   }, []);
 
-  // Extract unique categories directly checking both 'category' and 'sub' fields
+  // Safely extract unique categories dynamically from products
   const goldCategories = useMemo(() => {
     const subs = Array.from(
-      new Set(
-        goldProducts
-          .map((p) => (p.category || p.sub || "").trim())
-          .filter(Boolean)
-      )
+      new Set(goldProducts.map(getProductCategory).filter(Boolean))
     );
     return subs.length > 0 ? subs : DEFAULT_CATEGORIES;
   }, [goldProducts]);
 
   const silverCategories = useMemo(() => {
     const subs = Array.from(
-      new Set(
-        silverProducts
-          .map((p) => (p.category || p.sub || "").trim())
-          .filter(Boolean)
-      )
+      new Set(silverProducts.map(getProductCategory).filter(Boolean))
     );
     return subs.length > 0 ? subs : DEFAULT_CATEGORIES;
   }, [silverProducts]);
@@ -139,23 +137,17 @@ function Home() {
 
   // Filter products for dynamic trending tabs
   const goldTrending = goldProducts
-    .filter((p) => {
-      const cat = (p.category || p.sub || "").toLowerCase();
-      return cat === goldTab.toLowerCase();
-    })
+    .filter((p) => getProductCategory(p).toLowerCase() === goldTab.toLowerCase())
     .slice(0, 4);
 
   const silverTrending = silverProducts
-    .filter((p) => {
-      const cat = (p.category || p.sub || "").toLowerCase();
-      return cat === silverTab.toLowerCase();
-    })
+    .filter((p) => getProductCategory(p).toLowerCase() === silverTab.toLowerCase())
     .slice(0, 4);
 
   const explore = goldProducts.slice(0, 8);
   const bridalPicks = goldProducts
     .filter((p) => {
-      const cat = (p.category || p.sub || "").toLowerCase();
+      const cat = getProductCategory(p).toLowerCase();
       return cat === "necklaces" || cat === "mangalsutra";
     })
     .slice(0, 5);
@@ -288,7 +280,6 @@ function Home() {
             <p className="text-amber-200/60 text-xs mt-1">Handpicked gold bestsellers this season</p>
           </div>
 
-          {/* Subcategories extracted from Admin */}
           <div className="flex flex-wrap gap-2 justify-center mb-8">
             {goldCategories.map((t) => (
               <button
@@ -333,7 +324,6 @@ function Home() {
             <p className="text-[color:var(--muted-foreground)] text-xs mt-1">Contemporary sterling silver favourites</p>
           </div>
 
-          {/* Subcategories extracted from Admin */}
           <div className="flex flex-wrap gap-2 justify-center mb-8">
             {silverCategories.map((t) => (
               <button
