@@ -1,9 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, RefreshCw, TrendingUp } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowRight, RefreshCw, TrendingUp, Sparkles } from "lucide-react";
+import { useEffect, useState, useMemo } from "react";
 import { Layout } from "@/components/Layout";
 import { OrnamentalDivider } from "@/components/OrnamentalDivider";
-import { ProductCard, SimpleProductCard } from "@/components/ProductCard";
+import { ProductCard } from "@/components/ProductCard";
 import { metalSlug } from "@/lib/products";
 import { productsApi } from "@/lib/api";
 import { type Product } from "@/lib/store";
@@ -59,6 +59,13 @@ const FEATURED = [
   { name: "Chains", tag: "Everyday classics", img: `${catChains}?v=2` },
 ];
 
+// Helper function to dynamically pull category from product fields
+function getProductCategory(p: Product): string {
+  const raw = p as unknown as Record<string, unknown>;
+  const val = (p.sub || raw.subCategory || raw.category || "") as string;
+  return val.trim();
+}
+
 function Home() {
   const [goldProducts, setGoldProducts] = useState<Product[]>([]);
   const [silverProducts, setSilverProducts] = useState<Product[]>([]);
@@ -96,11 +103,26 @@ function Home() {
     return () => { cancelled = true; };
   }, []);
 
+  // Extract all categories added from Admin across Gold and Silver
+  const adminCategories = useMemo(() => {
+    const categoriesSet = new Set<string>();
+
+    goldProducts.forEach((p) => {
+      const cat = getProductCategory(p);
+      if (cat) categoriesSet.add(cat);
+    });
+
+    silverProducts.forEach((p) => {
+      const cat = getProductCategory(p);
+      if (cat) categoriesSet.add(cat);
+    });
+
+    return Array.from(categoriesSet);
+  }, [goldProducts, silverProducts]);
+
   // Top trending slices
   const goldTrending = goldProducts.slice(0, 4);
   const silverTrending = silverProducts.slice(0, 4);
-  const explore = goldProducts.slice(0, 8);
-  const bridalPicks = goldProducts.slice(0, 5);
 
   return (
     <Layout>
@@ -221,7 +243,7 @@ function Home() {
 
       <OrnamentalDivider />
 
-      {/* 3. Trending in Gold (LIGHT & CREAMY PANEL BG) */}
+      {/* 3. Trending in Gold */}
       <section className="max-w-7xl mx-auto px-4">
         <div style={{ backgroundColor: "var(--panel)" }} className="rounded-3xl p-6 md:p-10 border border-[color:var(--border)] shadow-sm">
           <div className="text-center mb-8">
@@ -249,7 +271,7 @@ function Home() {
 
       <OrnamentalDivider />
 
-      {/* 4. Trending in Silver (LIGHT & CREAMY PANEL BG) */}
+      {/* 4. Trending in Silver */}
       <section className="max-w-7xl mx-auto px-4">
         <div style={{ backgroundColor: "var(--panel)" }} className="rounded-3xl p-6 md:p-10 border border-[color:var(--border)] shadow-sm">
           <div className="text-center mb-8">
@@ -277,44 +299,49 @@ function Home() {
 
       <OrnamentalDivider />
 
-      {/* 5. Explore Our Categories (LIGHT & CREAMY PANEL BG) */}
-      <section className="max-w-7xl mx-auto px-4">
+      {/* 5. Explore Our Categories (Lists dynamically created categories from Admin) */}
+      <section className="max-w-7xl mx-auto px-4 mb-16">
         <div style={{ backgroundColor: "var(--panel)" }} className="rounded-3xl p-6 md:p-10 border border-[color:var(--border)] shadow-sm">
           <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
             <div>
-              <p className="label-caps text-[color:var(--gold-dark)] text-xs uppercase tracking-widest font-semibold">Discover</p>
+              <p className="label-caps text-[color:var(--gold-dark)] text-xs uppercase tracking-widest font-semibold">Catalogue</p>
               <h2 className="font-serif text-3xl md:text-4xl mt-1 text-[color:var(--espresso)]">Explore Our Categories</h2>
+              <p className="text-[color:var(--muted-foreground)] text-xs mt-1">Browse through our complete collection categories</p>
             </div>
-            <Link to="/gold" className="pill-gold text-xs">View All <ArrowRight className="w-3.5 h-3.5" /></Link>
+            <Link to="/gold" className="pill-gold text-xs">View All Products <ArrowRight className="w-3.5 h-3.5" /></Link>
           </div>
-          {!loadingGold && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {explore.map((p) => <ProductCard key={p.id} p={p} />)}
-              {explore.length === 0 && (
-                <p className="col-span-full text-center text-xs text-[color:var(--muted-foreground)] py-6">Products will be available soon!</p>
-              )}
+
+          {loadingGold || loadingSilver ? (
+            <div className="text-center py-8 text-xs text-[color:var(--muted-foreground)]">Loading categories...</div>
+          ) : adminCategories.length > 0 ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {adminCategories.map((catName) => (
+                <Link
+                  key={catName}
+                  to="/gold"
+                  search={{ cat: catName }}
+                  className="group bg-white border border-[color:var(--border)] rounded-2xl p-5 text-center hover:border-[color:var(--gold)] hover:shadow-md transition flex flex-col items-center justify-center gap-2"
+                >
+                  <div className="w-10 h-10 rounded-full bg-[color:var(--cream)] flex items-center justify-center text-[color:var(--gold-dark)] group-hover:bg-[color:var(--gold)] group-hover:text-white transition-colors">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <span className="font-serif text-base text-[color:var(--espresso)] font-medium capitalize">
+                    {catName}
+                  </span>
+                  <span className="text-[10px] text-[color:var(--gold-dark)] font-semibold inline-flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                    Explore <ArrowRight className="w-3 h-3" />
+                  </span>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 bg-white/80 rounded-2xl border border-[color:var(--border)] max-w-md mx-auto p-4">
+              <p className="text-[color:var(--espresso)] font-serif text-base">No categories found</p>
+              <p className="text-xs text-[color:var(--muted-foreground)] mt-1">Categories added from Admin will automatically show up here.</p>
             </div>
           )}
         </div>
       </section>
-
-      <OrnamentalDivider />
-
-      {/* 6. Bridal Picks */}
-      {!loadingGold && bridalPicks.length > 0 && (
-        <section className="max-w-7xl mx-auto px-4 mb-12">
-          <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
-            <div>
-              <p className="label-caps text-[color:var(--gold-dark)] text-xs">NVS Picks</p>
-              <h2 className="font-serif text-3xl md:text-4xl mt-1 text-[color:var(--espresso)]">Bridal Collection Picks</h2>
-            </div>
-            <Link to="/gold" className="text-[color:var(--gold-dark)] font-semibold text-xs inline-flex items-center gap-1">View All <ArrowRight className="w-3.5 h-3.5" /></Link>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            {bridalPicks.map((p) => <SimpleProductCard key={p.id} p={p} />)}
-          </div>
-        </section>
-      )}
     </Layout>
   );
 }
