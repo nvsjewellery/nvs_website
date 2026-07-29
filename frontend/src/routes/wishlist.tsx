@@ -6,30 +6,27 @@ import { ProductCard } from "@/components/ProductCard";
 import { productsApi } from "@/lib/api";
 import { useStore } from "@/lib/store";
 
-export const Route = createFileRoute("/wishlist")({ component: Wishlist });
+export const Route = createFileRoute("/wishlist")({
+  component: Wishlist,
+});
 
 function Wishlist() {
   const wishlist = useStore((s) => s.wishlist);
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Convert array to string so useEffect only triggers when IDs actually change
-  const wishlistKey = wishlist.join(",");
-
   useEffect(() => {
     let isMounted = true;
 
     async function loadWishlistProducts() {
-      if (!wishlistKey) {
+      if (!wishlist || wishlist.length === 0) {
         setItems([]);
         setLoading(false);
         return;
       }
 
-      setLoading(true);
       try {
-        const ids = wishlistKey.split(",").filter(Boolean);
-        const productPromises = ids.map((id) =>
+        const productPromises = wishlist.map((id: string) =>
           productsApi.getById(id).catch(() => null)
         );
         const results = await Promise.all(productPromises);
@@ -50,7 +47,7 @@ function Wishlist() {
     return () => {
       isMounted = false;
     };
-  }, [wishlistKey]); // <--- Key fix: Stable primitive string dependency
+  }, [wishlist.join(",")]); // <--- Keeps reference stable so it doesn't re-trigger continuously
 
   return (
     <Layout>
@@ -66,7 +63,7 @@ function Wishlist() {
 
         {loading ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-            {wishlist.map((id) => (
+            {wishlist.map((id: string) => (
               <div
                 key={id}
                 className="aspect-square bg-[color:var(--panel)] rounded-2xl animate-pulse border border-[color:var(--border)]"
@@ -84,7 +81,7 @@ function Wishlist() {
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-            {items.map((p) => (
+            {items.map((p: any) => (
               <ProductCard key={p.id} p={p} />
             ))}
           </div>
