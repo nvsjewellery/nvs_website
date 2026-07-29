@@ -181,10 +181,7 @@ function CartPage() {
                 Order Summary
               </h3>
               <Row l="Subtotal" v={formatINR(subtotal)} />
-              <Row
-                l="Shipping"
-                v={<span className="text-green-700 font-semibold">Free</span>}
-              />
+              
               {applied && (
                 <Row
                   l="Coupon (NVS10)"
