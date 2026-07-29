@@ -1,9 +1,12 @@
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 interface ApiResponse<T> {
-  success: boolean;
+  success?: boolean;
   message?: string;
   user?: T;
+  data?: T;
+  addresses?: T;
+  address?: T;
 }
 
 interface User {
@@ -40,6 +43,15 @@ export interface ProductItem {
   details?: string;
 }
 
+export interface AddressItem {
+  id: string;
+  label: string;
+  addressLine: string;
+  city: string;
+  pincode: string;
+  isDefault?: boolean;
+}
+
 // In-memory cache store
 const cache = {
   products: new Map<string, ProductItem[]>(),
@@ -52,7 +64,7 @@ async function request<T>(
 ): Promise<ApiResponse<T>> {
   const res = await fetch(`${API_URL}${endpoint}`, {
     ...options,
-    credentials: "include",
+    credentials: "include", // Preserves cookies across reloads
     headers: {
       "Content-Type": "application/json",
       ...options.headers,
@@ -86,6 +98,23 @@ export const api = {
   getMe: () => request<User>("/auth/me", { method: "GET" }),
 };
 
+export const addressesApi = {
+  getAll: async () => {
+    const res = await request<AddressItem[]>("/addresses", { method: "GET" });
+    return res.addresses || res.data || [];
+  },
+  create: async (data: { label: string; addressLine: string; city: string; pincode: string }) => {
+    const res = await request<AddressItem>("/addresses", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return res.address || res.data || res;
+  },
+  delete: async (id: string) => {
+    return request<null>(`/addresses/${id}`, { method: "DELETE" });
+  },
+};
+
 export const productsApi = {
   getByMetal: async (metal: "Gold" | "Silver") => {
     if (cache.products.has(metal)) {
@@ -106,7 +135,6 @@ export const productsApi = {
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || "Product not found");
     
-    // Normalize response whether backend nests inside data.product or returns directly
     const rawProduct = data.product || data;
     return {
       ...rawProduct,

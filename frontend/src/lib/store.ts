@@ -46,7 +46,7 @@ if (typeof window !== "undefined") {
       };
     }
   } catch {
-    // If localStorage parsing fails, stick with initial empty state
+    // Stick with default initial state on parse error
   }
 }
 
@@ -135,16 +135,18 @@ export const actions = {
 
   async register(name: string, email: string, password: string) {
     const res = await api.register(name, email, password);
-    if (res && res.user) {
-      state = { ...state, user: res.user, authChecked: true };
+    const user = res.user || (res as any).data || (res as any);
+    if (user && user.id) {
+      state = { ...state, user, authChecked: true };
       emit();
     }
   },
 
   async signIn(email: string, password: string) {
     const res = await api.login(email, password);
-    if (res && res.user) {
-      state = { ...state, user: res.user, authChecked: true };
+    const user = res.user || (res as any).data || (res as any);
+    if (user && user.id) {
+      state = { ...state, user, authChecked: true };
       emit();
     }
   },
@@ -161,13 +163,16 @@ export const actions = {
   async checkAuth() {
     try {
       const res = await api.getMe();
-      if (res && res.user) {
-        state = { ...state, user: res.user, authChecked: true };
+      const user = res.user || (res as any).data;
+      if (user && user.id) {
+        state = { ...state, user, authChecked: true };
       } else {
-        state = { ...state, user: null, authChecked: true };
+        // If server responds without error but has no user, set authChecked to true without wiping local user
+        state = { ...state, authChecked: true };
       }
     } catch {
-      state = { ...state, user: null, authChecked: true };
+      // Keep existing persisted local user on network or session check error
+      state = { ...state, authChecked: true };
     }
     emit();
   },
