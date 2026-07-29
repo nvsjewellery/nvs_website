@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Box, Heart, MapPin, Tag } from "lucide-react";
+import { Box, Heart, MapPin, Plus, Tag, Trash2 } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { OrnamentalDivider } from "@/components/OrnamentalDivider";
 import { actions, computeBreakdown, formatINR, useStore } from "@/lib/store";
@@ -10,11 +10,28 @@ export const Route = createFileRoute("/account")({ component: Account });
 
 type WishlistPreviewItem = { id: string; name: string; price: number };
 
+type Address = {
+  id: string;
+  label: string;
+  addressLine: string;
+  city: string;
+  pincode: string;
+};
+
 export function Account() {
   const user = useStore((s) => s.user);
   const wishlist = useStore((s) => s.wishlist);
   const nav = useNavigate();
+
   const [previewItems, setPreviewItems] = useState<WishlistPreviewItem[]>([]);
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [showAddForm, setShowAddForm] = useState(false);
+
+  // Address form fields
+  const [label, setLabel] = useState("Home");
+  const [addressLine, setAddressLine] = useState("");
+  const [city, setCity] = useState("");
+  const [pincode, setPincode] = useState("");
 
   const wishlistKeys = wishlist.join(",");
 
@@ -45,6 +62,29 @@ export function Account() {
       cancelled = true;
     };
   }, [wishlistKeys]);
+
+  const handleAddAddress = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addressLine || !city || !pincode) return;
+
+    const newAddr: Address = {
+      id: Date.now().toString(),
+      label,
+      addressLine,
+      city,
+      pincode,
+    };
+
+    setAddresses([...addresses, newAddr]);
+    setAddressLine("");
+    setCity("");
+    setPincode("");
+    setShowAddForm(false);
+  };
+
+  const handleRemoveAddress = (id: string) => {
+    setAddresses(addresses.filter((a) => a.id !== id));
+  };
 
   if (!user) {
     return (
@@ -126,9 +166,107 @@ export function Account() {
 
           {/* Saved Addresses Section */}
           <Card icon={<MapPin className="w-4 h-4" />} title="Saved Addresses">
-            <p className="text-sm text-[color:var(--muted-foreground)]">
-              No saved addresses found. Add an address during checkout.
-            </p>
+            {addresses.length === 0 && !showAddForm ? (
+              <p className="text-sm text-[color:var(--muted-foreground)] mb-4">
+                No saved addresses found.
+              </p>
+            ) : (
+              <div className="space-y-3 mb-4">
+                {addresses.map((a) => (
+                  <div
+                    key={a.id}
+                    className="p-3 bg-[color:var(--panel)] rounded-xl border border-[color:var(--border)] flex justify-between items-start"
+                  >
+                    <div>
+                      <span className="label-caps text-[10px] text-[color:var(--gold-dark)] font-bold">
+                        {a.label}
+                      </span>
+                      <p className="text-xs text-[color:var(--espresso)] font-medium mt-0.5">
+                        {a.addressLine}, {a.city} — {a.pincode}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleRemoveAddress(a.id)}
+                      className="text-red-500 p-1 hover:bg-red-50 rounded"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {showAddForm ? (
+              <form
+                onSubmit={handleAddAddress}
+                className="space-y-3 pt-2 border-t border-[color:var(--border)]"
+              >
+                <div className="flex gap-2">
+                  {["Home", "Work", "Other"].map((lbl) => (
+                    <button
+                      type="button"
+                      key={lbl}
+                      onClick={() => setLabel(lbl)}
+                      className={`px-3 py-1 text-xs rounded-full border transition-colors ${
+                        label === lbl
+                          ? "bg-[color:var(--gold)] text-white border-[color:var(--gold)]"
+                          : "border-[color:var(--border)] text-[color:var(--espresso)]"
+                      }`}
+                    >
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  placeholder="Street / House No. / Area"
+                  value={addressLine}
+                  onChange={(e) => setAddressLine(e.target.value)}
+                  className="w-full text-xs p-2.5 rounded-lg border border-[color:var(--border)] bg-white"
+                  required
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    placeholder="City"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    className="w-full text-xs p-2.5 rounded-lg border border-[color:var(--border)] bg-white"
+                    required
+                  />
+                  <input
+                    type="text"
+                    placeholder="Pincode"
+                    value={pincode}
+                    onChange={(e) => setPincode(e.target.value)}
+                    className="w-full text-xs p-2.5 rounded-lg border border-[color:var(--border)] bg-white"
+                    required
+                  />
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="submit"
+                    className="pill-gold !py-1.5 !px-3 text-xs"
+                  >
+                    Save Address
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddForm(false)}
+                    className="text-xs text-[color:var(--muted-foreground)] px-2"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <button
+                onClick={() => setShowAddForm(true)}
+                className="text-xs font-semibold text-[color:var(--gold-dark)] inline-flex items-center gap-1 hover:underline mt-1"
+              >
+                <Plus className="w-3.5 h-3.5" /> Add New Address
+              </button>
+            )}
           </Card>
 
           {/* Coupons Section */}
