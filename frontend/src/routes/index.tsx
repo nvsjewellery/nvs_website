@@ -59,7 +59,7 @@ const FEATURED = [
   { name: "Chains", tag: "Everyday classics", img: `${catChains}?v=2` },
 ];
 
-// Helper to safely resolve category name across backend variants
+// Helper function to dynamically pull category from product fields
 function getProductCategory(p: Product): string {
   const raw = p as unknown as Record<string, unknown>;
   const val = (p.sub || raw.subCategory || raw.category || "") as string;
@@ -103,7 +103,7 @@ function Home() {
     return () => { cancelled = true; };
   }, []);
 
-  // Extract separate category lists bound directly to Gold and Silver
+  // Separate dynamic category lists bound directly to Gold and Silver
   const goldCategories = useMemo(() => {
     const set = new Set<string>();
     goldProducts.forEach((p) => {
@@ -301,10 +301,10 @@ function Home() {
 
       <OrnamentalDivider />
 
-      {/* 5. Explore Our Categories (Separated accurately into Gold & Silver routes) */}
+      {/* 5. Explore Our Categories (Fully Centered Layout) */}
       <section className="max-w-7xl mx-auto px-4 mb-16">
-        <div style={{ backgroundColor: "var(--panel)" }} className="rounded-3xl p-6 md:p-10 border border-[color:var(--border)] shadow-sm space-y-8">
-          <div>
+        <div style={{ backgroundColor: "var(--panel)" }} className="rounded-3xl p-6 md:p-10 border border-[color:var(--border)] shadow-sm space-y-10">
+          <div className="text-center">
             <p className="label-caps text-[color:var(--gold-dark)] text-xs uppercase tracking-widest font-semibold">Catalogue</p>
             <h2 className="font-serif text-3xl md:text-4xl mt-1 text-[color:var(--espresso)]">Explore Our Categories</h2>
             <p className="text-[color:var(--muted-foreground)] text-xs mt-1">Browse through our complete collection categories by metal</p>
@@ -313,15 +313,15 @@ function Home() {
           {loadingGold && loadingSilver ? (
             <div className="text-center py-8 text-xs text-[color:var(--muted-foreground)]">Loading categories...</div>
           ) : (
-            <div className="space-y-8">
+            <div className="space-y-10">
               {/* Gold Categories */}
               {goldCategories.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-4">
+                <div className="text-center">
+                  <div className="inline-flex items-center justify-center gap-2 mb-4">
                     <span className="w-2.5 h-2.5 rounded-full bg-[color:var(--gold)]" />
                     <h3 className="font-serif text-xl text-[color:var(--espresso)] font-semibold">Gold Categories</h3>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 justify-center">
                     {goldCategories.map((catName) => (
                       <Link
                         key={`gold-${catName}`}
@@ -346,12 +346,12 @@ function Home() {
 
               {/* Silver Categories */}
               {silverCategories.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-4">
+                <div className="text-center">
+                  <div className="inline-flex items-center justify-center gap-2 mb-4">
                     <span className="w-2.5 h-2.5 rounded-full bg-slate-400" />
                     <h3 className="font-serif text-xl text-[color:var(--espresso)] font-semibold">Silver Categories</h3>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 justify-center">
                     {silverCategories.map((catName) => (
                       <Link
                         key={`silver-${catName}`}
