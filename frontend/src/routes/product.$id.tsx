@@ -1,5 +1,5 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Heart, Minus, Plus } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { OrnamentalDivider } from "@/components/OrnamentalDivider";
@@ -29,6 +29,18 @@ function ProductPage() {
   const wishlist = useStore((s) => s.wishlist);
   const saved = wishlist.includes(p?.id);
 
+  // Extract unique product images safely
+  const productImages = useMemo(() => {
+    const rawList = Array.isArray(p?.images) && p.images.length > 0
+      ? p.images
+      : [p?.image];
+    return Array.from(new Set(rawList.filter(Boolean)));
+  }, [p]);
+
+  // Track active selected main image
+  const [selectedImg, setSelectedImg] = useState<string | null>(null);
+  const currentImage = selectedImg || productImages[0] || p?.image || "";
+
   // Extract weight and calculate breakdown
   const weightVal = Number(p?.weight ?? p?.grossWeight ?? 0);
   const bd = computeBreakdown(weightVal, p?.purity || "22K");
@@ -51,19 +63,29 @@ function ProductPage() {
 
       <section className="max-w-7xl mx-auto px-4 grid grid-cols-1 lg:grid-cols-2 gap-10">
         <div>
+          {/* Main Selected Image */}
           <div className="aspect-square bg-[color:var(--panel)] rounded-2xl overflow-hidden border border-[color:var(--border)]">
-            <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
+            <img src={currentImage} alt={p.name} className="w-full h-full object-cover" />
           </div>
-          <div className="grid grid-cols-4 gap-3 mt-3">
-            {[0, 1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="aspect-square bg-[color:var(--panel)] rounded-lg overflow-hidden border border-[color:var(--border)] hover:border-[color:var(--gold)] cursor-pointer"
-              >
-                <img src={p.image} alt="" className="w-full h-full object-cover" />
-              </div>
-            ))}
-          </div>
+
+          {/* Render thumbnails ONLY if there are multiple unique images */}
+          {productImages.length > 1 && (
+            <div className="grid grid-cols-4 gap-3 mt-3">
+              {productImages.map((imgUrl: string, i: number) => (
+                <div
+                  key={i}
+                  onClick={() => setSelectedImg(imgUrl)}
+                  className={`aspect-square bg-[color:var(--panel)] rounded-lg overflow-hidden border cursor-pointer transition-colors ${
+                    currentImage === imgUrl
+                      ? "border-[color:var(--gold)] ring-1 ring-[color:var(--gold)]"
+                      : "border-[color:var(--border)] hover:border-[color:var(--gold)]"
+                  }`}
+                >
+                  <img src={imgUrl} alt="" className="w-full h-full object-cover" />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div>
