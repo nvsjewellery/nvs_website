@@ -59,7 +59,7 @@ const FEATURED = [
   { name: "Chains", tag: "Everyday classics", img: `${catChains}?v=2` },
 ];
 
-// Helper function to dynamically pull category from product fields
+// Helper to safely resolve category name across backend variants
 function getProductCategory(p: Product): string {
   const raw = p as unknown as Record<string, unknown>;
   const val = (p.sub || raw.subCategory || raw.category || "") as string;
@@ -103,22 +103,24 @@ function Home() {
     return () => { cancelled = true; };
   }, []);
 
-  // Extract all categories added from Admin across Gold and Silver
-  const adminCategories = useMemo(() => {
-    const categoriesSet = new Set<string>();
-
+  // Extract separate category lists bound directly to Gold and Silver
+  const goldCategories = useMemo(() => {
+    const set = new Set<string>();
     goldProducts.forEach((p) => {
       const cat = getProductCategory(p);
-      if (cat) categoriesSet.add(cat);
+      if (cat) set.add(cat);
     });
+    return Array.from(set);
+  }, [goldProducts]);
 
+  const silverCategories = useMemo(() => {
+    const set = new Set<string>();
     silverProducts.forEach((p) => {
       const cat = getProductCategory(p);
-      if (cat) categoriesSet.add(cat);
+      if (cat) set.add(cat);
     });
-
-    return Array.from(categoriesSet);
-  }, [goldProducts, silverProducts]);
+    return Array.from(set);
+  }, [silverProducts]);
 
   // Top trending slices
   const goldTrending = goldProducts.slice(0, 4);
@@ -299,45 +301,78 @@ function Home() {
 
       <OrnamentalDivider />
 
-      {/* 5. Explore Our Categories (Lists dynamically created categories from Admin) */}
+      {/* 5. Explore Our Categories (Separated accurately into Gold & Silver routes) */}
       <section className="max-w-7xl mx-auto px-4 mb-16">
-        <div style={{ backgroundColor: "var(--panel)" }} className="rounded-3xl p-6 md:p-10 border border-[color:var(--border)] shadow-sm">
-          <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
-            <div>
-              <p className="label-caps text-[color:var(--gold-dark)] text-xs uppercase tracking-widest font-semibold">Catalogue</p>
-              <h2 className="font-serif text-3xl md:text-4xl mt-1 text-[color:var(--espresso)]">Explore Our Categories</h2>
-              <p className="text-[color:var(--muted-foreground)] text-xs mt-1">Browse through our complete collection categories</p>
-            </div>
-            <Link to="/gold" className="pill-gold text-xs">View All Products <ArrowRight className="w-3.5 h-3.5" /></Link>
+        <div style={{ backgroundColor: "var(--panel)" }} className="rounded-3xl p-6 md:p-10 border border-[color:var(--border)] shadow-sm space-y-8">
+          <div>
+            <p className="label-caps text-[color:var(--gold-dark)] text-xs uppercase tracking-widest font-semibold">Catalogue</p>
+            <h2 className="font-serif text-3xl md:text-4xl mt-1 text-[color:var(--espresso)]">Explore Our Categories</h2>
+            <p className="text-[color:var(--muted-foreground)] text-xs mt-1">Browse through our complete collection categories by metal</p>
           </div>
 
-          {loadingGold || loadingSilver ? (
+          {loadingGold && loadingSilver ? (
             <div className="text-center py-8 text-xs text-[color:var(--muted-foreground)]">Loading categories...</div>
-          ) : adminCategories.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {adminCategories.map((catName) => (
-                <Link
-                  key={catName}
-                  to="/gold"
-                  search={{ cat: catName }}
-                  className="group bg-white border border-[color:var(--border)] rounded-2xl p-5 text-center hover:border-[color:var(--gold)] hover:shadow-md transition flex flex-col items-center justify-center gap-2"
-                >
-                  <div className="w-10 h-10 rounded-full bg-[color:var(--cream)] flex items-center justify-center text-[color:var(--gold-dark)] group-hover:bg-[color:var(--gold)] group-hover:text-white transition-colors">
-                    <Sparkles className="w-4 h-4" />
-                  </div>
-                  <span className="font-serif text-base text-[color:var(--espresso)] font-medium capitalize">
-                    {catName}
-                  </span>
-                  <span className="text-[10px] text-[color:var(--gold-dark)] font-semibold inline-flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
-                    Explore <ArrowRight className="w-3 h-3" />
-                  </span>
-                </Link>
-              ))}
-            </div>
           ) : (
-            <div className="text-center py-8 bg-white/80 rounded-2xl border border-[color:var(--border)] max-w-md mx-auto p-4">
-              <p className="text-[color:var(--espresso)] font-serif text-base">No categories found</p>
-              <p className="text-xs text-[color:var(--muted-foreground)] mt-1">Categories added from Admin will automatically show up here.</p>
+            <div className="space-y-8">
+              {/* Gold Categories */}
+              {goldCategories.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[color:var(--gold)]" />
+                    <h3 className="font-serif text-xl text-[color:var(--espresso)] font-semibold">Gold Categories</h3>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                    {goldCategories.map((catName) => (
+                      <Link
+                        key={`gold-${catName}`}
+                        to="/gold"
+                        search={{ cat: catName }}
+                        className="group bg-white border border-[color:var(--border)] rounded-2xl p-4 text-center hover:border-[color:var(--gold)] hover:shadow-md transition flex flex-col items-center justify-center gap-1.5"
+                      >
+                        <div className="w-9 h-9 rounded-full bg-[color:var(--cream)] flex items-center justify-center text-[color:var(--gold-dark)] group-hover:bg-[color:var(--gold)] group-hover:text-white transition-colors">
+                          <Sparkles className="w-4 h-4" />
+                        </div>
+                        <span className="font-serif text-sm text-[color:var(--espresso)] font-medium capitalize">
+                          {catName}
+                        </span>
+                        <span className="text-[10px] text-[color:var(--gold-dark)] font-semibold inline-flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                          Gold Collection <ArrowRight className="w-3 h-3" />
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Silver Categories */}
+              {silverCategories.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="w-2.5 h-2.5 rounded-full bg-slate-400" />
+                    <h3 className="font-serif text-xl text-[color:var(--espresso)] font-semibold">Silver Categories</h3>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                    {silverCategories.map((catName) => (
+                      <Link
+                        key={`silver-${catName}`}
+                        to="/silver"
+                        search={{ cat: catName }}
+                        className="group bg-white border border-[color:var(--border)] rounded-2xl p-4 text-center hover:border-[color:var(--gold)] hover:shadow-md transition flex flex-col items-center justify-center gap-1.5"
+                      >
+                        <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-700 group-hover:bg-slate-700 group-hover:text-white transition-colors">
+                          <Sparkles className="w-4 h-4" />
+                        </div>
+                        <span className="font-serif text-sm text-[color:var(--espresso)] font-medium capitalize">
+                          {catName}
+                        </span>
+                        <span className="text-[10px] text-slate-600 font-semibold inline-flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                          Silver Collection <ArrowRight className="w-3 h-3" />
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
