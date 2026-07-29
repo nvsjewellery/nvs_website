@@ -1,12 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight, RefreshCw, TrendingUp } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Layout } from "@/components/Layout";
 import { OrnamentalDivider } from "@/components/OrnamentalDivider";
 import { ProductCard, SimpleProductCard } from "@/components/ProductCard";
 import { metalSlug } from "@/lib/products";
 import { productsApi } from "@/lib/api";
 import { type Product } from "@/lib/store";
+
+// Clean static imports (TypeScript will resolve these without any TS(2307) errors)
 import catNecklaces from "@/assets/cat-necklaces.jpg";
 import catBangles from "@/assets/cat-bangles.jpg";
 import catRings from "@/assets/cat-rings.jpg";
@@ -48,26 +50,29 @@ const METALS = [
   { name: "Silver", grad: "linear-gradient(135deg,#e8e8ea,#a8a8ac)" },
 ];
 
+// Cache-busting parameter added directly to the image URLs to bypass Vercel/browser cache
 const FEATURED = [
-  { name: "Necklaces", tag: "Handcrafted heirlooms", img: catNecklaces },
-  { name: "Bangles", tag: "Stacked in tradition", img: catBangles },
-  { name: "Rings", tag: "Sparkling promises", img: catRings },
-  { name: "Earrings", tag: "Jhumkas & drops", img: catEarrings },
-  { name: "Mangalsutra", tag: "Sacred bonds", img: catMangalsutra },
-  { name: "Chains", tag: "Everyday classics", img: catChains },
+  { name: "Necklaces", tag: "Handcrafted heirlooms", img: `${catNecklaces}?v=2` },
+  { name: "Bangles", tag: "Stacked in tradition", img: `${catBangles}?v=2` },
+  { name: "Rings", tag: "Sparkling promises", img: `${catRings}?v=2` },
+  { name: "Earrings", tag: "Jhumkas & drops", img: `${catEarrings}?v=2` },
+  { name: "Mangalsutra", tag: "Sacred bonds", img: `${catMangalsutra}?v=2` },
+  { name: "Chains", tag: "Everyday classics", img: `${catChains}?v=2` },
 ];
 
+const DEFAULT_CATEGORIES = ["Rings", "Necklaces", "Earrings", "Bangles", "Chains"];
+
 function Home() {
-  const [goldTab, setGoldTab] = useState("Rings");
-  const [silverTab, setSilverTab] = useState("Rings");
-  
   const [goldProducts, setGoldProducts] = useState<Product[]>([]);
   const [silverProducts, setSilverProducts] = useState<Product[]>([]);
   const [loadingGold, setLoadingGold] = useState(true);
   const [loadingSilver, setLoadingSilver] = useState(true);
-  
+
+  const [goldTab, setGoldTab] = useState("Rings");
+  const [silverTab, setSilverTab] = useState("Rings");
   const [currentSlide, setCurrentSlide] = useState(0);
 
+  // Auto-advance hero carousel
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % HERO_SLIDES.length);
@@ -97,6 +102,31 @@ function Home() {
     return () => { cancelled = true; };
   }, []);
 
+  // Dynamically extract unique categories from Admin Products
+  const goldCategories = useMemo(() => {
+    const subs = Array.from(new Set(goldProducts.map((p) => p.sub?.trim()).filter(Boolean)));
+    return subs.length > 0 ? subs : DEFAULT_CATEGORIES;
+  }, [goldProducts]);
+
+  const silverCategories = useMemo(() => {
+    const subs = Array.from(new Set(silverProducts.map((p) => p.sub?.trim()).filter(Boolean)));
+    return subs.length > 0 ? subs : DEFAULT_CATEGORIES;
+  }, [silverProducts]);
+
+  // Set default active tab once categories load from API
+  useEffect(() => {
+    if (goldCategories.length > 0 && !goldCategories.includes(goldTab)) {
+      setGoldTab(goldCategories[0]);
+    }
+  }, [goldCategories]);
+
+  useEffect(() => {
+    if (silverCategories.length > 0 && !silverCategories.includes(silverTab)) {
+      setSilverTab(silverCategories[0]);
+    }
+  }, [silverCategories]);
+
+  // Filter products for trending sections
   const goldTrending = goldProducts.filter((p) => p.sub?.toLowerCase() === goldTab.toLowerCase()).slice(0, 4);
   const silverTrending = silverProducts.filter((p) => p.sub?.toLowerCase() === silverTab.toLowerCase()).slice(0, 4);
 
@@ -182,7 +212,7 @@ function Home() {
 
       <OrnamentalDivider />
 
-      {/* Featured Categories */}
+      {/* Featured Categories Grid Layout */}
       <section className="max-w-7xl mx-auto px-4">
         <div className="text-center mb-10">
           <p className="label-caps text-[color:var(--gold-dark)] text-xs">Signature Edits</p>
@@ -220,7 +250,7 @@ function Home() {
 
       <OrnamentalDivider />
 
-      {/* Trending in Gold */}
+      {/* Dynamic Trending in Gold */}
       <section className="max-w-7xl mx-auto px-4">
         <div style={{ backgroundColor: "var(--panel)" }} className="rounded-3xl p-6 md:p-10 border border-[color:var(--border)]">
           <div className="text-center mb-8">
@@ -228,15 +258,18 @@ function Home() {
             <h2 className="font-serif text-3xl md:text-4xl mt-1 text-[color:var(--espresso)]">Trending in Gold</h2>
             <p className="text-[color:var(--muted-foreground)] text-xs mt-1">Handpicked bestsellers this season</p>
           </div>
+
           <div className="flex flex-wrap gap-2 justify-center mb-8">
-            {["Rings", "Necklaces", "Earrings", "Bangles", "Chains"].map((t) => (
+            {goldCategories.map((t) => (
               <button
                 key={t}
                 onClick={() => setGoldTab(t)}
                 className={`px-4 py-1.5 rounded-full text-xs font-medium transition ${
-                  goldTab === t ? "bg-[color:var(--gold)] text-white" : "bg-white border border-[color:var(--border)] text-[color:var(--espresso)] hover:border-[color:var(--gold)]"
+                  goldTab.toLowerCase() === t.toLowerCase() ? "bg-[color:var(--gold)] text-white" : "bg-white border border-[color:var(--border)] text-[color:var(--espresso)] hover:border-[color:var(--gold)]"
                 }`}
-              >{t}</button>
+              >
+                {t}
+              </button>
             ))}
           </div>
 
@@ -259,7 +292,7 @@ function Home() {
 
       <OrnamentalDivider />
 
-      {/* Trending in Silver */}
+      {/* Dynamic Trending in Silver */}
       <section className="max-w-7xl mx-auto px-4">
         <div style={{ backgroundColor: "var(--panel)" }} className="rounded-3xl p-6 md:p-10 border border-[color:var(--border)]">
           <div className="text-center mb-8">
@@ -267,15 +300,18 @@ function Home() {
             <h2 className="font-serif text-3xl md:text-4xl mt-1 text-[color:var(--espresso)]">Trending in Silver</h2>
             <p className="text-[color:var(--muted-foreground)] text-xs mt-1">Contemporary sterling silver favourites</p>
           </div>
+
           <div className="flex flex-wrap gap-2 justify-center mb-8">
-            {["Rings", "Necklaces", "Earrings", "Bangles", "Chains"].map((t) => (
+            {silverCategories.map((t) => (
               <button
                 key={t}
                 onClick={() => setSilverTab(t)}
                 className={`px-4 py-1.5 rounded-full text-xs font-medium transition ${
-                  silverTab === t ? "bg-[color:var(--gold)] text-white" : "bg-white border border-[color:var(--border)] text-[color:var(--espresso)] hover:border-[color:var(--gold)]"
+                  silverTab.toLowerCase() === t.toLowerCase() ? "bg-[color:var(--gold)] text-white" : "bg-white border border-[color:var(--border)] text-[color:var(--espresso)] hover:border-[color:var(--gold)]"
                 }`}
-              >{t}</button>
+              >
+                {t}
+              </button>
             ))}
           </div>
 
@@ -319,7 +355,7 @@ function Home() {
 
       <OrnamentalDivider />
 
-      {/* Bridal Collection Picks */}
+      {/* Bridal Picks */}
       {!loadingGold && bridalPicks.length > 0 && (
         <section className="max-w-7xl mx-auto px-4 mb-12">
           <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
