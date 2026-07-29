@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { ProductCard } from "@/components/ProductCard";
-import { categoriesApi, productsApi, type Category } from "@/lib/api";
+import { categoriesApi, productsApi, type Category, type ProductItem } from "@/lib/api";
 import type { Product } from "@/lib/store";
 
 interface CategoryPageProps {
@@ -17,8 +17,8 @@ export function CategoryPage({ metal, description }: CategoryPageProps) {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
 
+    // Fetch data (will resolve instantly if already cached in api.ts)
     Promise.all([
       productsApi.getByMetal(metal),
       categoriesApi.getByMetal(metal),
@@ -58,7 +58,7 @@ export function CategoryPage({ metal, description }: CategoryPageProps) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-          {/* Left Sidebar: ONLY Admin Created Categories */}
+          {/* Sidebar Categories */}
           <aside className="space-y-6">
             <div>
               <h3 className="label-caps text-xs text-[color:var(--gold-dark)] mb-3 uppercase tracking-wider font-semibold">
@@ -93,7 +93,7 @@ export function CategoryPage({ metal, description }: CategoryPageProps) {
 
                 {!loading && categories.length === 0 && (
                   <p className="text-xs text-[color:var(--muted-foreground)] px-3 py-2">
-                    No categories created in admin yet.
+                    No categories found.
                   </p>
                 )}
               </div>
@@ -108,7 +108,7 @@ export function CategoryPage({ metal, description }: CategoryPageProps) {
               </p>
             </div>
 
-            {loading ? (
+            {loading && products.length === 0 ? (
               <div className="text-center py-12 text-[color:var(--muted-foreground)]">
                 Loading products...
               </div>
