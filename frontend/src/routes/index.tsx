@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight, RefreshCw, TrendingUp } from "lucide-react";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { OrnamentalDivider } from "@/components/OrnamentalDivider";
 import { ProductCard, SimpleProductCard } from "@/components/ProductCard";
@@ -59,23 +59,11 @@ const FEATURED = [
   { name: "Chains", tag: "Everyday classics", img: `${catChains}?v=2` },
 ];
 
-const DEFAULT_CATEGORIES = ["Rings", "Necklaces", "Earrings", "Bangles", "Chains"];
-
-// Robust helper to extract category across all backend property variants (sub, subCategory, category)
-function getProductCategory(p: Product): string {
-  const raw = p as unknown as Record<string, unknown>;
-  const val = (p.sub || raw.subCategory || raw.category || "") as string;
-  return val.trim();
-}
-
 function Home() {
   const [goldProducts, setGoldProducts] = useState<Product[]>([]);
   const [silverProducts, setSilverProducts] = useState<Product[]>([]);
   const [loadingGold, setLoadingGold] = useState(true);
   const [loadingSilver, setLoadingSilver] = useState(true);
-
-  const [goldTab, setGoldTab] = useState("");
-  const [silverTab, setSilverTab] = useState("");
   const [currentSlide, setCurrentSlide] = useState(0);
 
   // Auto-advance hero carousel
@@ -108,50 +96,11 @@ function Home() {
     return () => { cancelled = true; };
   }, []);
 
-  // Dynamically extract unique categories from actual Admin DB products
-  const goldCategories = useMemo(() => {
-    const categories = Array.from(
-      new Set(goldProducts.map(getProductCategory).filter(Boolean))
-    );
-    return categories.length > 0 ? categories : DEFAULT_CATEGORIES;
-  }, [goldProducts]);
-
-  const silverCategories = useMemo(() => {
-    const categories = Array.from(
-      new Set(silverProducts.map(getProductCategory).filter(Boolean))
-    );
-    return categories.length > 0 ? categories : DEFAULT_CATEGORIES;
-  }, [silverProducts]);
-
-  // Sync active tabs to first available category when products load
-  useEffect(() => {
-    if (goldCategories.length > 0 && !goldCategories.some((c) => c.toLowerCase() === goldTab.toLowerCase())) {
-      setGoldTab(goldCategories[0]);
-    }
-  }, [goldCategories]);
-
-  useEffect(() => {
-    if (silverCategories.length > 0 && !silverCategories.some((c) => c.toLowerCase() === silverTab.toLowerCase())) {
-      setSilverTab(silverCategories[0]);
-    }
-  }, [silverCategories]);
-
-  // Filter products for dynamic trending tabs
-  const goldTrending = goldProducts
-    .filter((p) => getProductCategory(p).toLowerCase() === goldTab.toLowerCase())
-    .slice(0, 4);
-
-  const silverTrending = silverProducts
-    .filter((p) => getProductCategory(p).toLowerCase() === silverTab.toLowerCase())
-    .slice(0, 4);
-
+  // Top trending slices
+  const goldTrending = goldProducts.slice(0, 4);
+  const silverTrending = silverProducts.slice(0, 4);
   const explore = goldProducts.slice(0, 8);
-  const bridalPicks = goldProducts
-    .filter((p) => {
-      const cat = getProductCategory(p).toLowerCase();
-      return cat === "necklaces" || cat === "mangalsutra";
-    })
-    .slice(0, 5);
+  const bridalPicks = goldProducts.slice(0, 5);
 
   return (
     <Layout>
@@ -213,7 +162,7 @@ function Home() {
 
       <OrnamentalDivider />
 
-      {/* 1. Shop by Metal (Light / Base BG) */}
+      {/* 1. Shop by Metal */}
       <section className="max-w-7xl mx-auto px-4">
         <div className="text-center mb-10">
           <p className="label-caps text-[color:var(--gold-dark)] text-xs">Choose Your Metal</p>
@@ -232,9 +181,9 @@ function Home() {
 
       <OrnamentalDivider />
 
-      {/* 2. Featured Categories Grid (Light Panel BG) */}
+      {/* 2. Featured Categories Grid */}
       <section className="max-w-7xl mx-auto px-4">
-        <div style={{ backgroundColor: "var(--panel)" }} className="rounded-3xl p-6 md:p-10 border border-[color:var(--border)]">
+        <div style={{ backgroundColor: "var(--panel)" }} className="rounded-3xl p-6 md:p-10 border border-[color:var(--border)] shadow-sm">
           <div className="text-center mb-10">
             <p className="label-caps text-[color:var(--gold-dark)] text-xs">Signature Edits</p>
             <h2 className="font-serif text-3xl md:text-4xl mt-1 text-[color:var(--espresso)]">Featured Categories</h2>
@@ -272,33 +221,17 @@ function Home() {
 
       <OrnamentalDivider />
 
-      {/* 3. Trending in Gold (DARK ESPRESSO BG - Matched with Brand Theme) */}
+      {/* 3. Trending in Gold (LIGHT & CREAMY PANEL BG) */}
       <section className="max-w-7xl mx-auto px-4">
-        <div style={{ backgroundColor: "var(--espresso)" }} className="rounded-3xl p-6 md:p-10 border border-[color:var(--gold)]/20 text-white shadow-xl">
+        <div style={{ backgroundColor: "var(--panel)" }} className="rounded-3xl p-6 md:p-10 border border-[color:var(--border)] shadow-sm">
           <div className="text-center mb-8">
-            <p className="label-caps text-[color:var(--gold)] text-xs uppercase tracking-widest font-semibold">Curated Favourites</p>
-            <h2 className="font-serif text-3xl md:text-4xl mt-1 text-[color:var(--cream)]">Trending in Gold</h2>
-            <p className="text-[color:var(--cream)]/70 text-xs mt-1">Handpicked gold bestsellers this season</p>
-          </div>
-
-          <div className="flex flex-wrap gap-2 justify-center mb-8">
-            {goldCategories.map((t) => (
-              <button
-                key={t}
-                onClick={() => setGoldTab(t)}
-                className={`px-4 py-1.5 rounded-full text-xs font-medium transition ${
-                  goldTab.toLowerCase() === t.toLowerCase() 
-                    ? "bg-[color:var(--gold)] text-[color:var(--espresso)] font-semibold shadow-md" 
-                    : "bg-white/10 border border-white/15 text-white/80 hover:border-[color:var(--gold)] hover:text-white"
-                }`}
-              >
-                {t}
-              </button>
-            ))}
+            <p className="label-caps text-[color:var(--gold-dark)] text-xs uppercase tracking-widest font-semibold">Curated Favourites</p>
+            <h2 className="font-serif text-3xl md:text-4xl mt-1 text-[color:var(--espresso)]">Trending in Gold</h2>
+            <p className="text-[color:var(--muted-foreground)] text-xs mt-1">Handpicked gold bestsellers this season</p>
           </div>
 
           {loadingGold ? (
-            <div className="text-center py-10 text-xs text-white/60">Loading products...</div>
+            <div className="text-center py-10 text-xs text-[color:var(--muted-foreground)]">Loading products...</div>
           ) : goldTrending.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {goldTrending.map((p) => (
@@ -306,9 +239,9 @@ function Home() {
               ))}
             </div>
           ) : (
-            <div className="text-center py-10 bg-white/5 rounded-2xl border border-white/10 max-w-md mx-auto p-4">
-              <p className="text-[color:var(--cream)] font-serif text-base">Products will be available soon!</p>
-              <p className="text-xs text-white/60 mt-1">We are updating new handcrafted designs for {goldTab}.</p>
+            <div className="text-center py-10 bg-white/80 rounded-2xl border border-[color:var(--border)] max-w-md mx-auto p-4">
+              <p className="text-[color:var(--espresso)] font-serif text-base">Products will be available soon!</p>
+              <p className="text-xs text-[color:var(--muted-foreground)] mt-1">We are updating new handcrafted designs.</p>
             </div>
           )}
         </div>
@@ -316,29 +249,13 @@ function Home() {
 
       <OrnamentalDivider />
 
-      {/* 4. Trending in Silver (LIGHT CREAM BG) */}
+      {/* 4. Trending in Silver (LIGHT & CREAMY PANEL BG) */}
       <section className="max-w-7xl mx-auto px-4">
-        <div style={{ backgroundColor: "var(--panel)" }} className="rounded-3xl p-6 md:p-10 border border-[color:var(--border)]">
+        <div style={{ backgroundColor: "var(--panel)" }} className="rounded-3xl p-6 md:p-10 border border-[color:var(--border)] shadow-sm">
           <div className="text-center mb-8">
             <p className="label-caps text-[color:var(--gold-dark)] text-xs">Modern Sterling Classics</p>
             <h2 className="font-serif text-3xl md:text-4xl mt-1 text-[color:var(--espresso)]">Trending in Silver</h2>
             <p className="text-[color:var(--muted-foreground)] text-xs mt-1">Contemporary sterling silver favourites</p>
-          </div>
-
-          <div className="flex flex-wrap gap-2 justify-center mb-8">
-            {silverCategories.map((t) => (
-              <button
-                key={t}
-                onClick={() => setSilverTab(t)}
-                className={`px-4 py-1.5 rounded-full text-xs font-medium transition ${
-                  silverTab.toLowerCase() === t.toLowerCase() 
-                    ? "bg-[color:var(--gold)] text-white shadow-sm font-semibold" 
-                    : "bg-white border border-[color:var(--border)] text-[color:var(--espresso)] hover:border-[color:var(--gold)]"
-                }`}
-              >
-                {t}
-              </button>
-            ))}
           </div>
 
           {loadingSilver ? (
@@ -352,7 +269,7 @@ function Home() {
           ) : (
             <div className="text-center py-10 bg-white/80 rounded-2xl border border-[color:var(--border)] max-w-md mx-auto p-4">
               <p className="text-[color:var(--espresso)] font-serif text-base">Products will be available soon!</p>
-              <p className="text-xs text-[color:var(--muted-foreground)] mt-1">We are currently adding silver products for {silverTab}.</p>
+              <p className="text-xs text-[color:var(--muted-foreground)] mt-1">We are currently adding silver products.</p>
             </div>
           )}
         </div>
@@ -360,13 +277,13 @@ function Home() {
 
       <OrnamentalDivider />
 
-      {/* 5. Explore Our Categories (DARK ESPRESSO BG) */}
+      {/* 5. Explore Our Categories (LIGHT & CREAMY PANEL BG) */}
       <section className="max-w-7xl mx-auto px-4">
-        <div style={{ backgroundColor: "var(--espresso)" }} className="rounded-3xl p-6 md:p-10 border border-[color:var(--gold)]/20 text-white">
+        <div style={{ backgroundColor: "var(--panel)" }} className="rounded-3xl p-6 md:p-10 border border-[color:var(--border)] shadow-sm">
           <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
             <div>
-              <p className="label-caps text-[color:var(--gold)] text-xs uppercase tracking-widest font-semibold">Discover</p>
-              <h2 className="font-serif text-3xl md:text-4xl mt-1 text-[color:var(--cream)]">Explore Our Categories</h2>
+              <p className="label-caps text-[color:var(--gold-dark)] text-xs uppercase tracking-widest font-semibold">Discover</p>
+              <h2 className="font-serif text-3xl md:text-4xl mt-1 text-[color:var(--espresso)]">Explore Our Categories</h2>
             </div>
             <Link to="/gold" className="pill-gold text-xs">View All <ArrowRight className="w-3.5 h-3.5" /></Link>
           </div>
@@ -374,7 +291,7 @@ function Home() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {explore.map((p) => <ProductCard key={p.id} p={p} />)}
               {explore.length === 0 && (
-                <p className="col-span-full text-center text-xs text-white/60 py-6">Products will be available soon!</p>
+                <p className="col-span-full text-center text-xs text-[color:var(--muted-foreground)] py-6">Products will be available soon!</p>
               )}
             </div>
           )}
@@ -383,7 +300,7 @@ function Home() {
 
       <OrnamentalDivider />
 
-      {/* 6. Bridal Picks (Light BG) */}
+      {/* 6. Bridal Picks */}
       {!loadingGold && bridalPicks.length > 0 && (
         <section className="max-w-7xl mx-auto px-4 mb-12">
           <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
