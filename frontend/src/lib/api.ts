@@ -12,6 +12,17 @@ interface User {
   email: string;
 }
 
+export interface Category {
+  id: string;
+  metal: "Gold" | "Silver";
+  name: string;
+  slug: string;
+  metaTitle?: string;
+  metaDesc?: string;
+  image?: string;
+  sortOrder?: number;
+}
+
 async function request<T>(
   endpoint: string,
   options: RequestInit = {}
@@ -52,7 +63,6 @@ export const api = {
   getMe: () => request<User>("/auth/me", { method: "GET" }),
 };
 
-
 export const productsApi = {
   getByMetal: async (metal: "Gold" | "Silver") => {
     const res = await fetch(`${API_URL}/products?metal=${metal}`, { credentials: "include" });
@@ -72,5 +82,14 @@ export const productsApi = {
       id: string; name: string; metal: string; sub: string; purity: string;
       weight: number; price: number; gemstone: string; image: string;
     };
+  },
+};
+
+export const categoriesApi = {
+  getByMetal: async (metal: "Gold" | "Silver") => {
+    const res = await fetch(`${API_URL}/categories?metal=${metal}`, { credentials: "include" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || "Failed to load categories");
+    return (data.categories || data) as Category[];
   },
 };
