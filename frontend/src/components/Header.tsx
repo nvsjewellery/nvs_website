@@ -1,5 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { Heart, ShoppingBag, User, Search } from "lucide-react";
+import { useEffect, useState } from "react";
 import logo from "@/assets/nvs-logo.png";
 import { useStore } from "@/lib/store";
 
@@ -14,7 +15,17 @@ export function Header() {
   const cart = useStore((s) => s.cart);
   const wishlist = useStore((s) => s.wishlist);
   const pathname = useRouterState({ select: (r) => r.location.pathname });
-  const cartCount = cart.reduce((n, c) => n + c.qty, 0);
+
+  // Hydration state to avoid SSR/Client mismatches
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Compute counts safely
+  const cartCount = mounted ? cart.reduce((n, c) => n + c.qty, 0) : 0;
+  // Deduplicate wishlist IDs in case identical items were saved twice
+  const wishlistCount = mounted ? Array.from(new Set(wishlist)).length : 0;
 
   return (
     <header className="sticky top-0 z-50">
@@ -38,14 +49,18 @@ export function Header() {
             </Link>
             <Link to="/wishlist" className="relative p-2 rounded-full hover:bg-white/60 transition" aria-label="Wishlist">
               <Heart className="w-5 h-5 text-[color:var(--espresso)]" />
-              {wishlist.length > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 text-[10px] bg-[color:var(--gold)] text-white rounded-full w-4 h-4 grid place-items-center font-bold">{wishlist.length}</span>
+              {wishlistCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 text-[10px] bg-[color:var(--gold)] text-white rounded-full w-4 h-4 grid place-items-center font-bold">
+                  {wishlistCount}
+                </span>
               )}
             </Link>
             <Link to="/cart" className="relative p-2 rounded-full hover:bg-white/60 transition" aria-label="Cart">
               <ShoppingBag className="w-5 h-5 text-[color:var(--espresso)]" />
               {cartCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 text-[10px] bg-[color:var(--gold)] text-white rounded-full w-4 h-4 grid place-items-center font-bold">{cartCount}</span>
+                <span className="absolute -top-0.5 -right-0.5 text-[10px] bg-[color:var(--gold)] text-white rounded-full w-4 h-4 grid place-items-center font-bold">
+                  {cartCount}
+                </span>
               )}
             </Link>
           </div>

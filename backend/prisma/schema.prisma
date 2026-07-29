@@ -8,26 +8,31 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   name      String
-  email     String   @unique
+  email     String    @unique
   password  String
   phone     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  addresses Address[] // Added relation to saved addresses
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   @@map("users")
 }
 
-enum Metal {
-  Gold
-  Silver
-}
+model Address {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label       String   @default("Home") // Home, Work, Other
+  addressLine String
+  city        String
+  pincode     String
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-enum ProductStatus {
-  Active
-  Inactive
-  Draft
+  @@map("addresses")
 }
 
 model Product {
@@ -51,34 +56,25 @@ model Product {
   sold             Int           @default(0)
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
+  gstRate          Float?        @default(3)
 
   @@map("products")
 }
 
 model Category {
-  id          String   @id @default(cuid())
-  metal       Metal
-  name        String
-  slug        String
-  metaTitle   String   @default("")
-  metaDesc    String   @default("")
-  image       String   @default("")
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  metal     Metal
+  name      String
+  slug      String
+  metaTitle String   @default("")
+  metaDesc  String   @default("")
+  image     String   @default("")
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([metal, slug])
   @@map("categories")
-}
-
-enum DiscountScope {
-  VA
-  Total
-}
-
-enum DiscountKind {
-  percent
-  flat
 }
 
 model Discount {
@@ -92,4 +88,25 @@ model Discount {
   createdAt  DateTime      @default(now())
 
   @@map("discounts")
+}
+
+enum Metal {
+  Gold
+  Silver
+}
+
+enum ProductStatus {
+  Active
+  Inactive
+  Draft
+}
+
+enum DiscountScope {
+  VA
+  Total
+}
+
+enum DiscountKind {
+  percent
+  flat
 }

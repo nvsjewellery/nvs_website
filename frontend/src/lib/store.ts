@@ -32,6 +32,7 @@ type State = {
 const KEY = "nvs-store-v1";
 let state: State = { cart: [], wishlist: [], user: null, authChecked: false };
 
+// Load initial state from localStorage on client side
 if (typeof window !== "undefined") {
   try {
     const raw = localStorage.getItem(KEY);
@@ -39,12 +40,14 @@ if (typeof window !== "undefined") {
       const parsed = JSON.parse(raw);
       state = {
         ...state,
-        cart: parsed.cart ?? [],
-        wishlist: parsed.wishlist ?? [],
+        cart: Array.isArray(parsed.cart) ? parsed.cart : [],
+        wishlist: Array.isArray(parsed.wishlist) ? parsed.wishlist : [],
         user: parsed.user ?? null,
       };
     }
-  } catch {}
+  } catch {
+    // If localStorage parsing fails, stick with initial empty state
+  }
 }
 
 const listeners = new Set<() => void>();
@@ -65,6 +68,11 @@ function emit() {
   listeners.forEach((l) => l());
 }
 
+// Broadcast initial loaded state right after main thread initialization
+if (typeof window !== "undefined") {
+  setTimeout(() => emit(), 0);
+}
+
 function subscribe(l: () => void) {
   listeners.add(l);
   return () => listeners.delete(l);
@@ -75,7 +83,11 @@ const SERVER_SNAPSHOT: State = { cart: [], wishlist: [], user: null, authChecked
 const getServerSnapshot = () => SERVER_SNAPSHOT;
 
 export function useStore<T>(sel: (s: State) => T): T {
-  return useSyncExternalStore(subscribe, () => sel(state), () => sel(getServerSnapshot()));
+  return useSyncExternalStore(
+    subscribe,
+    () => sel(getSnapshot()),
+    () => sel(getServerSnapshot())
+  );
 }
 
 export const actions = {
@@ -89,23 +101,28 @@ export const actions = {
     };
     emit();
   },
+
   updateQty(productId: string, qty: number) {
     state = {
       ...state,
-      cart: qty <= 0
-        ? state.cart.filter((c) => c.productId !== productId)
-        : state.cart.map((c) => (c.productId === productId ? { ...c, qty } : c)),
+      cart:
+        qty <= 0
+          ? state.cart.filter((c) => c.productId !== productId)
+          : state.cart.map((c) => (c.productId === productId ? { ...c, qty } : c)),
     };
     emit();
   },
+
   removeFromCart(productId: string) {
     state = { ...state, cart: state.cart.filter((c) => c.productId !== productId) };
     emit();
   },
+
   clearCart() {
     state = { ...state, cart: [] };
     emit();
   },
+
   toggleWishlist(productId: string) {
     state = {
       ...state,
@@ -118,18 +135,20 @@ export const actions = {
 
   async register(name: string, email: string, password: string) {
     const res = await api.register(name, email, password);
-    if (res.user) {
+    if (res && res.user) {
       state = { ...state, user: res.user, authChecked: true };
       emit();
     }
   },
+
   async signIn(email: string, password: string) {
     const res = await api.login(email, password);
-    if (res.user) {
+    if (res && res.user) {
       state = { ...state, user: res.user, authChecked: true };
       emit();
     }
   },
+
   async signOut() {
     try {
       await api.logout();
@@ -138,23 +157,23 @@ export const actions = {
       emit();
     }
   },
+
   async checkAuth() {
     try {
       const res = await api.getMe();
       if (res && res.user) {
         state = { ...state, user: res.user, authChecked: true };
       } else {
-        // Fallback to local storage user if backend returns empty response without throwing
-        state = { ...state, authChecked: true };
+        state = { ...state, user: null, authChecked: true };
       }
     } catch {
-      // Keep existing persisted local user if network fails or route doesn't return 401 explicitly
-      state = { ...state, authChecked: true };
+      state = { ...state, user: null, authChecked: true };
     }
     emit();
   },
 };
 
+// Check session on startup
 if (typeof window !== "undefined") {
   actions.checkAuth();
 }
@@ -165,7 +184,7 @@ export let LIVE_RATES: Record<string, number> = {
   "18K": 10870,
   "14K": 8454,
   "9K": 5435,
-  "PT950": 3450,
+  PT950: 3450,
   "92.5": 222,
 };
 
