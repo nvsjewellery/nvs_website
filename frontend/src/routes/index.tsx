@@ -59,10 +59,18 @@ const FEATURED = [
   { name: "Chains", tag: "Everyday classics", img: `${catChains}?v=2` },
 ];
 
-// Helper function to dynamically pull category from product fields
+// Robust helper to extract category from API product objects
 function getProductCategory(p: Product): string {
+  if (!p) return "";
   const raw = p as unknown as Record<string, unknown>;
-  const val = (p.sub || raw.subCategory || raw.category || "") as string;
+  const val = (
+    p.sub || 
+    raw.subCategory || 
+    raw.category || 
+    p.category || 
+    ""
+  ) as string;
+
   return val.trim();
 }
 
@@ -103,12 +111,15 @@ function Home() {
     return () => { cancelled = true; };
   }, []);
 
-  // Separate dynamic category lists bound directly to Gold and Silver
+  // Dynamic category lists with formatting and deduplication
   const goldCategories = useMemo(() => {
     const set = new Set<string>();
     goldProducts.forEach((p) => {
       const cat = getProductCategory(p);
-      if (cat) set.add(cat);
+      if (cat) {
+        const formatted = cat.charAt(0).toUpperCase() + cat.slice(1).toLowerCase();
+        set.add(formatted);
+      }
     });
     return Array.from(set);
   }, [goldProducts]);
@@ -117,7 +128,10 @@ function Home() {
     const set = new Set<string>();
     silverProducts.forEach((p) => {
       const cat = getProductCategory(p);
-      if (cat) set.add(cat);
+      if (cat) {
+        const formatted = cat.charAt(0).toUpperCase() + cat.slice(1).toLowerCase();
+        set.add(formatted);
+      }
     });
     return Array.from(set);
   }, [silverProducts]);
@@ -301,7 +315,7 @@ function Home() {
 
       <OrnamentalDivider />
 
-      {/* 5. Explore Our Categories (Fully Centered Layout) */}
+      {/* 5. Explore Our Categories (Centered Grid & Dynamic Lists) */}
       <section className="max-w-7xl mx-auto px-4 mb-16">
         <div style={{ backgroundColor: "var(--panel)" }} className="rounded-3xl p-6 md:p-10 border border-[color:var(--border)] shadow-sm space-y-10">
           <div className="text-center">
@@ -321,13 +335,13 @@ function Home() {
                     <span className="w-2.5 h-2.5 rounded-full bg-[color:var(--gold)]" />
                     <h3 className="font-serif text-xl text-[color:var(--espresso)] font-semibold">Gold Categories</h3>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 justify-center">
+                  <div className="flex flex-wrap items-center justify-center gap-4">
                     {goldCategories.map((catName) => (
                       <Link
                         key={`gold-${catName}`}
                         to="/gold"
                         search={{ cat: catName }}
-                        className="group bg-white border border-[color:var(--border)] rounded-2xl p-4 text-center hover:border-[color:var(--gold)] hover:shadow-md transition flex flex-col items-center justify-center gap-1.5"
+                        className="group w-44 sm:w-48 bg-white border border-[color:var(--border)] rounded-2xl p-4 text-center hover:border-[color:var(--gold)] hover:shadow-md transition flex flex-col items-center justify-center gap-1.5"
                       >
                         <div className="w-9 h-9 rounded-full bg-[color:var(--cream)] flex items-center justify-center text-[color:var(--gold-dark)] group-hover:bg-[color:var(--gold)] group-hover:text-white transition-colors">
                           <Sparkles className="w-4 h-4" />
@@ -351,13 +365,13 @@ function Home() {
                     <span className="w-2.5 h-2.5 rounded-full bg-slate-400" />
                     <h3 className="font-serif text-xl text-[color:var(--espresso)] font-semibold">Silver Categories</h3>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 justify-center">
+                  <div className="flex flex-wrap items-center justify-center gap-4">
                     {silverCategories.map((catName) => (
                       <Link
                         key={`silver-${catName}`}
                         to="/silver"
                         search={{ cat: catName }}
-                        className="group bg-white border border-[color:var(--border)] rounded-2xl p-4 text-center hover:border-[color:var(--gold)] hover:shadow-md transition flex flex-col items-center justify-center gap-1.5"
+                        className="group w-44 sm:w-48 bg-white border border-[color:var(--border)] rounded-2xl p-4 text-center hover:border-[color:var(--gold)] hover:shadow-md transition flex flex-col items-center justify-center gap-1.5"
                       >
                         <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-700 group-hover:bg-slate-700 group-hover:text-white transition-colors">
                           <Sparkles className="w-4 h-4" />
