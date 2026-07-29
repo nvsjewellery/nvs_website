@@ -17,13 +17,13 @@ import catChains from "@/assets/cat-chains.jpg";
 
 export const Route = createFileRoute("/")({ component: Home });
 
-// Carousel Slides Definition (Bright & Professional Model Aesthetic)
+// Updated reliable high-res model images
 const HERO_SLIDES = [
   {
     title: "Everyday Gold,",
     highlight: "Timeless Sparkle",
     subtitle: "Certified craftsmanship since 1978. Discover heirloom pieces crafted for modern elegance.",
-    image: "https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?q=80&w=1920&auto=format&fit=crop",
+    image: "https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?q=80&w=1920&auto=format&fit=crop",
     linkText: "Shop Gold Collection",
     linkUrl: "/gold",
   },
@@ -31,7 +31,7 @@ const HERO_SLIDES = [
     title: "Graceful Heritage,",
     highlight: "Royal Bridal Edits",
     subtitle: "Intricately detailed temple and bridal jewellery designed to make your special moments eternal.",
-    image: "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?q=80&w=1920&auto=format&fit=crop",
+    image: "https://images.unsplash.com/photo-1605100804763-247f67b3557e?q=80&w=1920&auto=format&fit=crop",
     linkText: "Explore Bridal Line",
     linkUrl: "/gold",
   },
@@ -39,7 +39,7 @@ const HERO_SLIDES = [
     title: "Pure & Radiant,",
     highlight: "Silver Craftsmanship",
     subtitle: "Hallmarked sterling silver and fine bullion articles styled for contemporary everyday luxury.",
-    image: "https://images.unsplash.com/photo-1611591475155-4284fa282b8a?q=80&w=1920&auto=format&fit=crop",
+    image: "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?q=80&w=1920&auto=format&fit=crop",
     linkText: "Discover Silver",
     linkUrl: "/silver",
   },
@@ -70,7 +70,6 @@ function Home() {
   // Hero Carousel State
   const [currentSlide, setCurrentSlide] = useState(0);
 
-  // Auto-scroll hero slides every 4.5 seconds
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % HERO_SLIDES.length);
@@ -94,8 +93,8 @@ function Home() {
 
   return (
     <Layout>
-      {/* Dynamic Bright Model Hero Carousel */}
-      <section className="relative h-[80vh] min-h-[520px] max-h-[720px] overflow-hidden bg-[color:var(--cream)]">
+      {/* Full-width Model Banner Carousel */}
+      <section className="relative h-[80vh] min-h-[520px] max-h-[720px] overflow-hidden bg-black">
         {HERO_SLIDES.map((slide, idx) => (
           <div
             key={slide.title}
@@ -103,28 +102,28 @@ function Home() {
               idx === currentSlide ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"
             }`}
           >
-            {/* Background Model Image */}
+            {/* Full Unobscured Background Model Image */}
             <img
               src={slide.image}
               alt={slide.title}
               className="absolute inset-0 w-full h-full object-cover object-center scale-105 transition-transform duration-[4500ms] ease-out"
             />
             
-            {/* Elegant Soft Bright Gradient (Ivory / Soft Gold to transparent) */}
-            <div className="absolute inset-0 bg-gradient-to-r from-[color:var(--cream)]/95 via-[color:var(--cream)]/75 to-transparent md:w-3/4" />
+            {/* Minimal gradient for text contrast (No side color washout) */}
+            <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent max-w-3xl" />
 
             <div className="relative z-10 max-w-7xl mx-auto px-6 h-full flex items-center">
               <div className="max-w-xl space-y-4">
-                <p className="label-caps text-[color:var(--gold-dark)] text-xs tracking-widest font-semibold uppercase">
+                <p className="label-caps text-[color:var(--gold)] text-xs tracking-widest font-semibold uppercase">
                   NVS Jewellery Presents
                 </p>
-                <h1 className="font-serif text-4xl sm:text-5xl md:text-6xl leading-[1.1] text-[color:var(--espresso)]">
+                <h1 className="font-serif text-4xl sm:text-5xl md:text-6xl leading-[1.1] text-white">
                   {slide.title}<br />
-                  <span className="text-[color:var(--gold-dark)] italic font-serif">
+                  <span className="text-[color:var(--gold)] italic font-serif">
                     {slide.highlight}
                   </span>
                 </h1>
-                <p className="text-[color:var(--espresso)]/80 text-sm md:text-base leading-relaxed max-w-md">
+                <p className="text-white/85 text-sm md:text-base leading-relaxed max-w-md">
                   {slide.subtitle}
                 </p>
                 <div className="pt-2">
@@ -145,7 +144,7 @@ function Home() {
               onClick={() => setCurrentSlide(i)}
               aria-label={`Go to slide ${i + 1}`}
               className={`h-2 rounded-full transition-all duration-300 ${
-                i === currentSlide ? "w-8 bg-[color:var(--gold-dark)]" : "w-2 bg-[color:var(--espresso)]/30 hover:bg-[color:var(--espresso)]/60"
+                i === currentSlide ? "w-8 bg-[color:var(--gold)]" : "w-2 bg-white/40 hover:bg-white/80"
               }`}
             />
           ))}
