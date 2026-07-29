@@ -13,11 +13,14 @@ function Wishlist() {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Convert array to string so useEffect only triggers when IDs actually change
+  const wishlistKey = wishlist.join(",");
+
   useEffect(() => {
     let isMounted = true;
 
     async function loadWishlistProducts() {
-      if (wishlist.length === 0) {
+      if (!wishlistKey) {
         setItems([]);
         setLoading(false);
         return;
@@ -25,13 +28,11 @@ function Wishlist() {
 
       setLoading(true);
       try {
-        // Fetch all saved wishlist products in parallel by ID
-        const productPromises = wishlist.map((id) =>
+        const ids = wishlistKey.split(",").filter(Boolean);
+        const productPromises = ids.map((id) =>
           productsApi.getById(id).catch(() => null)
         );
         const results = await Promise.all(productPromises);
-        
-        // Filter out nulls/failed requests
         const validProducts = results.filter(Boolean);
 
         if (isMounted) {
@@ -49,7 +50,7 @@ function Wishlist() {
     return () => {
       isMounted = false;
     };
-  }, [wishlist]);
+  }, [wishlistKey]); // <--- Key fix: Stable primitive string dependency
 
   return (
     <Layout>
