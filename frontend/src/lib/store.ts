@@ -37,21 +37,40 @@ if (typeof window !== "undefined") {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      state = { ...state, cart: parsed.cart ?? [], wishlist: parsed.wishlist ?? [] };
+      state = {
+        ...state,
+        cart: parsed.cart ?? [],
+        wishlist: parsed.wishlist ?? [],
+        user: parsed.user ?? null, // <--- Load user from localStorage
+      };
     }
   } catch {}
 }
 
 const listeners = new Set<() => void>();
+
 function emit() {
   if (typeof window !== "undefined") {
     try {
-      localStorage.setItem(KEY, JSON.stringify({ cart: state.cart, wishlist: state.wishlist }));
+      // Save cart, wishlist AND user to localStorage
+      localStorage.setItem(
+        KEY,
+        JSON.stringify({
+          cart: state.cart,
+          wishlist: state.wishlist,
+          user: state.user, // <--- Persist user state
+        })
+      );
     } catch {}
   }
   listeners.forEach((l) => l());
 }
-function subscribe(l: () => void) { listeners.add(l); return () => listeners.delete(l); }
+
+function subscribe(l: () => void) {
+  listeners.add(l);
+  return () => listeners.delete(l);
+}
+
 const getSnapshot = () => state;
 
 const SERVER_SNAPSHOT: State = { cart: [], wishlist: [], user: null, authChecked: false };
@@ -85,7 +104,10 @@ export const actions = {
     state = { ...state, cart: state.cart.filter((c) => c.productId !== productId) };
     emit();
   },
-  clearCart() { state = { ...state, cart: [] }; emit(); },
+  clearCart() {
+    state = { ...state, cart: [] };
+    emit();
+  },
   toggleWishlist(productId: string) {
     state = {
       ...state,
@@ -121,13 +143,19 @@ export const actions = {
   async checkAuth() {
     try {
       const res = await api.getMe();
-      state = { ...state, user: res.user ?? null, authChecked: true };
+      state = { ...state, user: res.user ?? state.user, authChecked: true };
     } catch {
+      // If server session invalid, clear local user state
       state = { ...state, user: null, authChecked: true };
     }
     emit();
   },
 };
+
+// Check backend auth status automatically on initial browser load
+if (typeof window !== "undefined") {
+  actions.checkAuth();
+}
 
 export let LIVE_RATES: Record<string, number> = {
   "24K": 14493,
