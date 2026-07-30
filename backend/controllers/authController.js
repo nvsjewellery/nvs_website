@@ -4,77 +4,126 @@ const { validationResult } = require("express-validator");
 const prisma = require("../lib/prisma");
 const generateToken = require("../utils/generateToken");
 
-// @desc Register new user
-// @route POST /api/auth/register
+//
+// REGISTER
+//
 const registerUser = asyncHandler(async (req, res) => {
   const errors = validationResult(req);
+
   if (!errors.isEmpty()) {
     res.status(400);
     throw new Error(errors.array()[0].msg);
   }
 
   const { name, email, password } = req.body;
+
   const normalizedEmail = email.toLowerCase().trim();
 
-  const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+  const existing = await prisma.user.findUnique({
+    where: {
+      email: normalizedEmail,
+    },
+  });
+
   if (existing) {
     res.status(400);
     throw new Error("Email already registered");
   }
 
   const salt = await bcrypt.genSalt(12);
+
   const hashedPassword = await bcrypt.hash(password, salt);
 
   const user = await prisma.user.create({
-    data: { name, email: normalizedEmail, password: hashedPassword },
+    data: {
+      name,
+      email: normalizedEmail,
+      password: hashedPassword,
+    },
   });
 
-  generateToken(res, user.id);
+  const token = generateToken(user.id);
 
   res.status(201).json({
     success: true,
-    user: { id: user.id, name: user.name, email: user.email },
+    token,
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+    },
   });
 });
 
-// @desc Login user
-// @route POST /api/auth/login
+//
+// LOGIN
+//
 const loginUser = asyncHandler(async (req, res) => {
   const errors = validationResult(req);
+
   if (!errors.isEmpty()) {
     res.status(400);
     throw new Error(errors.array()[0].msg);
   }
 
   const { email, password } = req.body;
+
   const normalizedEmail = email.toLowerCase().trim();
 
-  const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+  const user = await prisma.user.findUnique({
+    where: {
+      email: normalizedEmail,
+    },
+  });
 
-  if (!user || !(await bcrypt.compare(password, user.password))) {
+  if (!user) {
     res.status(401);
     throw new Error("Invalid email or password");
   }
 
-  generateToken(res, user.id);
+  const matched = await bcrypt.compare(password, user.password);
+
+  if (!matched) {
+    res.status(401);
+    throw new Error("Invalid email or password");
+  }
+
+  const token = generateToken(user.id);
 
   res.status(200).json({
     success: true,
-    user: { id: user.id, name: user.name, email: user.email },
+    token,
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+    },
   });
 });
 
-// @desc Logout user
-// @route POST /api/auth/logout
+//
+// LOGOUT
+//
 const logoutUser = asyncHandler(async (req, res) => {
-  res.cookie("token", "", { httpOnly: true, expires: new Date(0) });
-  res.status(200).json({ success: true, message: "Logged out" });
+  res.status(200).json({
+    success: true,
+    message: "Logged out",
+  });
 });
 
-// @desc Get logged-in user
-// @route GET /api/auth/me
+//
+// GET ME
+//
 const getMe = asyncHandler(async (req, res) => {
-  res.status(200).json({ success: true, user: req.user });
+  res.status(200).json({
+    success: true,
+    user: req.user,
+  });
 });
 
-module.exports = { registerUser, loginUser, logoutUser, getMe };
+module.exports = {
+  registerUser,
+  loginUser,
+  logoutUser,
+  getMe,
+};
