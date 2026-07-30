@@ -99,19 +99,38 @@ export const api = {
 };
 
 export const addressesApi = {
-  getAll: async () => {
-    const res = await request<AddressItem[]>("/addresses", { method: "GET" });
-    return res.addresses || res.data || [];
+  async getAll(): Promise<AddressItem[]> {
+    const res = await request<AddressItem[]>("/addresses", {
+      method: "GET",
+    });
+
+    return res.addresses ?? [];
   },
-  create: async (data: { label: string; addressLine: string; city: string; pincode: string }) => {
+
+  async create(data: {
+    label: string;
+    addressLine: string;
+    city: string;
+    pincode: string;
+    isDefault?: boolean;
+  }): Promise<AddressItem> {
+
     const res = await request<AddressItem>("/addresses", {
       method: "POST",
       body: JSON.stringify(data),
     });
-    return res.address || res.data || res;
+
+    if (!res.address) {
+      throw new Error("Failed to save address");
+    }
+
+    return res.address;
   },
-  delete: async (id: string) => {
-    return request<null>(`/addresses/${id}`, { method: "DELETE" });
+
+  async delete(id: string) {
+    return request(`/addresses/${id}`, {
+      method: "DELETE",
+    });
   },
 };
 
