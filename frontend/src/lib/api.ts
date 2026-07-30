@@ -1,8 +1,23 @@
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
+const TOKEN_KEY = "nvs-token";
+
+export function saveToken(token: string) {
+  localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function removeToken() {
+  localStorage.removeItem(TOKEN_KEY);
+}
+
 interface ApiResponse<T> {
   success?: boolean;
   message?: string;
+  token?: string;
   user?: T;
   data?: T;
   addresses?: T;
@@ -52,7 +67,6 @@ export interface AddressItem {
   isDefault?: boolean;
 }
 
-// In-memory cache store
 const cache = {
   products: new Map<string, ProductItem[]>(),
   categories: new Map<string, Category[]>(),
@@ -62,11 +76,17 @@ async function request<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
+  const token = getToken();
+
   const res = await fetch(`${API_URL}${endpoint}`, {
     ...options,
-    credentials: "include", // Preserves cookies across reloads
     headers: {
       "Content-Type": "application/json",
+      ...(token
+        ? {
+            Authorization: `Bearer ${token}`,
+          }
+        : {}),
       ...options.headers,
     },
   });
@@ -81,21 +101,58 @@ async function request<T>(
 }
 
 export const api = {
-  register: (name: string, email: string, password: string) =>
-    request<User>("/auth/register", {
+  register: async (
+    name: string,
+    email: string,
+    password: string
+  ) => {
+    const res = await request<User>("/auth/register", {
       method: "POST",
-      body: JSON.stringify({ name, email, password }),
-    }),
+      body: JSON.stringify({
+        name,
+        email,
+        password,
+      }),
+    });
 
-  login: (email: string, password: string) =>
-    request<User>("/auth/login", {
+    if (res.token) {
+      saveToken(res.token);
+    }
+
+    return res;
+  },
+
+  login: async (
+    email: string,
+    password: string
+  ) => {
+    const res = await request<User>("/auth/login", {
       method: "POST",
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({
+        email,
+        password,
+      }),
+    });
+
+    if (res.token) {
+      saveToken(res.token);
+    }
+
+    return res;
+  },
+
+  logout: async () => {
+    removeToken();
+
+    return {
+      success: true,
+    };
+  },
+
+  getMe: () =>
+    request<User>("/auth/me", {
+      method: "GET",
     }),
-
-  logout: () => request<null>("/auth/logout", { method: "POST" }),
-
-  getMe: () => request<User>("/auth/me", { method: "GET" }),
 };
 
 export const addressesApi = {
@@ -114,7 +171,6 @@ export const addressesApi = {
     pincode: string;
     isDefault?: boolean;
   }): Promise<AddressItem> {
-
     const res = await request<AddressItem>("/addresses", {
       method: "POST",
       body: JSON.stringify(data),
@@ -140,25 +196,56 @@ export const productsApi = {
       return cache.products.get(metal)!;
     }
 
-    const res = await fetch(`${API_URL}/products?metal=${metal}`, { credentials: "include" });
+    const token = getToken();
+
+    const res = await fetch(`${API_URL}/products?metal=${metal}`, {
+      headers: token
+        ? {
+            Authorization: `Bearer ${token}`,
+          }
+        : {},
+    });
+
     const data = await res.json();
-    if (!res.ok) throw new Error(data.message || "Failed to load products");
-    
+
+    if (!res.ok) {
+      throw new Error(data.message || "Failed to load products");
+    }
+
     const products = (data.products || data) as ProductItem[];
+
     cache.products.set(metal, products);
+
     return products;
   },
 
   getById: async (id: string) => {
-    const res = await fetch(`${API_URL}/products/${id}`, { credentials: "include" });
+    const token = getToken();
+
+    const res = await fetch(`${API_URL}/products/${id}`, {
+      headers: token
+        ? {
+            Authorization: `Bearer ${token}`,
+          }
+        : {},
+    });
+
     const data = await res.json();
-    if (!res.ok) throw new Error(data.message || "Product not found");
-    
+
+    if (!res.ok) {
+      throw new Error(data.message || "Product not found");
+    }
+
     const rawProduct = data.product || data;
+
     return {
       ...rawProduct,
       weight: rawProduct.weight ?? rawProduct.grossWeight ?? 0,
-      description: rawProduct.description ?? rawProduct.desc ?? rawProduct.details ?? "",
+      description:
+        rawProduct.description ??
+        rawProduct.desc ??
+        rawProduct.details ??
+        "",
     } as ProductItem;
   },
 };
@@ -169,12 +256,26 @@ export const categoriesApi = {
       return cache.categories.get(metal)!;
     }
 
-    const res = await fetch(`${API_URL}/categories?metal=${metal}`, { credentials: "include" });
+    const token = getToken();
+
+    const res = await fetch(`${API_URL}/categories?metal=${metal}`, {
+      headers: token
+        ? {
+            Authorization: `Bearer ${token}`,
+          }
+        : {},
+    });
+
     const data = await res.json();
-    if (!res.ok) throw new Error(data.message || "Failed to load categories");
-    
+
+    if (!res.ok) {
+      throw new Error(data.message || "Failed to load categories");
+    }
+
     const categories = (data.categories || data) as Category[];
+
     cache.categories.set(metal, categories);
+
     return categories;
   },
 };

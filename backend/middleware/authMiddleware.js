@@ -3,9 +3,12 @@ const asyncHandler = require("express-async-handler");
 const prisma = require("../lib/prisma");
 
 const protect = asyncHandler(async (req, res, next) => {
-  let token = req.cookies?.token;
+  let token;
 
-  if (!token && req.headers.authorization?.startsWith("Bearer")) {
+  if (
+    req.headers.authorization &&
+    req.headers.authorization.startsWith("Bearer ")
+  ) {
     token = req.headers.authorization.split(" ")[1];
   }
 
@@ -16,20 +19,34 @@ const protect = asyncHandler(async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
     const user = await prisma.user.findUnique({
-      where: { id: decoded.id },
-      select: { id: true, name: true, email: true, phone: true, createdAt: true },
+      where: {
+        id: decoded.id,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        createdAt: true,
+      },
     });
+
     if (!user) {
       res.status(401);
-      throw new Error("Not authorized, user not found");
+      throw new Error("User not found");
     }
+
     req.user = user;
+
     next();
-  } catch (err) {
+  } catch (error) {
     res.status(401);
-    throw new Error("Not authorized, token invalid or expired");
+    throw new Error("Invalid or expired token");
   }
 });
 
-module.exports = { protect };
+module.exports = {
+  protect,
+};

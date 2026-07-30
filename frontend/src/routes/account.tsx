@@ -4,7 +4,10 @@ import { Box, Heart, MapPin, Plus, Tag, Trash2 } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { OrnamentalDivider } from "@/components/OrnamentalDivider";
 import { actions, computeBreakdown, formatINR, useStore } from "@/lib/store";
-import { productsApi } from "@/lib/api";
+import {
+  productsApi,
+  addressesApi,
+} from "@/lib/api";
 
 export const Route = createFileRoute("/account")({ component: Account });
 
@@ -64,28 +67,73 @@ export function Account() {
     };
   }, [wishlistKeys]);
 
-  const handleAddAddress = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!addressLine || !city || !pincode) return;
+  useEffect(() => {
+  if (!user) return;
 
-    const newAddr: Address = {
-      id: Date.now().toString(),
-      label,
-      addressLine,
-      city,
-      pincode,
-    };
+  async function loadAddresses() {
+    try {
+      const data = await addressesApi.getAll();
+      setAddresses(data);
+    } catch (err) {
+      console.error(err);
+    }
+  }
 
-    setAddresses([...addresses, newAddr]);
+  loadAddresses();
+}, [user]);
+
+  const handleAddAddress = async (
+  e: React.FormEvent
+) => {
+  e.preventDefault();
+
+  if (
+    !addressLine ||
+    !city ||
+    !pincode
+  )
+    return;
+
+  try {
+    const address =
+      await addressesApi.create({
+        label,
+        addressLine,
+        city,
+        pincode,
+      });
+
+    setAddresses((prev) => [
+      ...prev,
+      address,
+    ]);
+
+    setLabel("Home");
     setAddressLine("");
     setCity("");
     setPincode("");
-    setShowAddForm(false);
-  };
 
-  const handleRemoveAddress = (id: string) => {
-    setAddresses(addresses.filter((a) => a.id !== id));
-  };
+    setShowAddForm(false);
+  } catch (err) {
+    console.error(err);
+    alert("Failed to save address");
+  }
+};
+
+  const handleRemoveAddress = async (
+  id: string
+) => {
+  try {
+    await addressesApi.delete(id);
+
+    setAddresses((prev) =>
+      prev.filter((a) => a.id !== id)
+    );
+  } catch (err) {
+    console.error(err);
+    alert("Failed to delete address");
+  }
+};
 
   // Wait for initial check before assuming user is signed out
   if (!user && !authChecked) {
