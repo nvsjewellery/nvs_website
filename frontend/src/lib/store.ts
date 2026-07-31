@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import { api } from "@/lib/api";
+import { api, wishlistApi, cartApi } from "@/lib/api";
 
 export interface Product {
   id: string;
@@ -20,8 +20,17 @@ export interface Product {
   details?: string;
 }
 
-type CartItem = { productId: string; qty: number };
-type User = { id: string; name: string; email: string };
+export type CartItem = {
+  productId: string;
+  qty: number;
+};
+
+type User = {
+  id: string;
+  name: string;
+  email: string;
+};
+
 type State = {
   cart: CartItem[];
   wishlist: string[];
@@ -29,160 +38,178 @@ type State = {
   authChecked: boolean;
 };
 
-const KEY = "nvs-store-v1";
-let state: State = { cart: [], wishlist: [], user: null, authChecked: false };
-
-// Load initial state from localStorage on client side
-if (typeof window !== "undefined") {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      state = {
-        ...state,
-        cart: Array.isArray(parsed.cart) ? parsed.cart : [],
-        wishlist: Array.isArray(parsed.wishlist) ? parsed.wishlist : [],
-        user: parsed.user ?? null,
-      };
-    }
-  } catch {
-    // Stick with default initial state on parse error
-  }
-}
+let state: State = {
+  cart: [],
+  wishlist: [],
+  user: null,
+  authChecked: false,
+};
 
 const listeners = new Set<() => void>();
 
 function emit() {
-  if (typeof window !== "undefined") {
-    try {
-      localStorage.setItem(
-        KEY,
-        JSON.stringify({
-          cart: state.cart,
-          wishlist: state.wishlist,
-          user: state.user,
-        })
-      );
-    } catch {}
-  }
-  listeners.forEach((l) => l());
+  listeners.forEach((listener) => listener());
 }
 
-// Broadcast initial loaded state right after main thread initialization
-if (typeof window !== "undefined") {
-  setTimeout(() => emit(), 0);
-}
-
-function subscribe(l: () => void) {
-  listeners.add(l);
-  return () => listeners.delete(l);
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
 }
 
 const getSnapshot = () => state;
-const SERVER_SNAPSHOT: State = { cart: [], wishlist: [], user: null, authChecked: false };
+
+const SERVER_SNAPSHOT: State = {
+  cart: [],
+  wishlist: [],
+  user: null,
+  authChecked: false,
+};
+
 const getServerSnapshot = () => SERVER_SNAPSHOT;
 
-export function useStore<T>(sel: (s: State) => T): T {
+export function useStore<T>(selector: (state: State) => T): T {
   return useSyncExternalStore(
     subscribe,
-    () => sel(getSnapshot()),
-    () => sel(getServerSnapshot())
+    () => selector(getSnapshot()),
+    () => selector(getServerSnapshot())
   );
 }
 
 export const actions = {
-  addToCart(productId: string, qty = 1) {
-    const existing = state.cart.find((c) => c.productId === productId);
-    state = {
-      ...state,
-      cart: existing
-        ? state.cart.map((c) => (c.productId === productId ? { ...c, qty: c.qty + qty } : c))
-        : [...state.cart, { productId, qty }],
-    };
+  async addToCart(productId: string, qty = 1) {
+    if (!state.user) return;
+
+    await cartApi.add(productId, qty);
+
+    state.cart = await cartApi.getAll();
+
     emit();
   },
 
-  updateQty(productId: string, qty: number) {
-    state = {
-      ...state,
-      cart:
-        qty <= 0
-          ? state.cart.filter((c) => c.productId !== productId)
-          : state.cart.map((c) => (c.productId === productId ? { ...c, qty } : c)),
-    };
+  async updateQty(productId: string, qty: number) {
+    if (!state.user) return;
+
+    if (qty <= 0) {
+      await cartApi.remove(productId);
+    } else {
+      await cartApi.update(productId, qty);
+    }
+
+    state.cart = await cartApi.getAll();
+
     emit();
   },
 
-  removeFromCart(productId: string) {
-    state = { ...state, cart: state.cart.filter((c) => c.productId !== productId) };
+  async removeFromCart(productId: string) {
+    if (!state.user) return;
+
+    await cartApi.remove(productId);
+
+    state.cart = await cartApi.getAll();
+
     emit();
   },
 
-  clearCart() {
-    state = { ...state, cart: [] };
+  async clearCart() {
+    if (!state.user) return;
+
+    await cartApi.clear();
+
+    state.cart = [];
+
     emit();
   },
 
-  toggleWishlist(productId: string) {
-    state = {
-      ...state,
-      wishlist: state.wishlist.includes(productId)
-        ? state.wishlist.filter((id) => id !== productId)
-        : [...state.wishlist, productId],
-    };
+  async toggleWishlist(productId: string) {
+    if (!state.user) return;
+
+    if (state.wishlist.includes(productId)) {
+      await wishlistApi.remove(productId);
+    } else {
+      await wishlistApi.add(productId);
+    }
+
+    state.wishlist = await wishlistApi.getAll();
+
     emit();
   },
 
   async register(name: string, email: string, password: string) {
     const res = await api.register(name, email, password);
-    const user = res.user || (res as any).data || (res as any);
-    if (user && user.id) {
-      state = { ...state, user, authChecked: true };
-      emit();
-    }
+
+    if (!res.user) return;
+
+    state.user = res.user;
+    state.authChecked = true;
+
+    state.cart = await cartApi.getAll();
+    state.wishlist = await wishlistApi.getAll();
+
+    emit();
   },
 
   async signIn(email: string, password: string) {
     const res = await api.login(email, password);
-    const user = res.user || (res as any).data || (res as any);
-    if (user && user.id) {
-      state = { ...state, user, authChecked: true };
-      emit();
-    }
+
+    if (!res.user) return;
+
+    state.user = res.user;
+    state.authChecked = true;
+
+    state.cart = await cartApi.getAll();
+    state.wishlist = await wishlistApi.getAll();
+
+    emit();
   },
 
   async signOut() {
     try {
       await api.logout();
-    } finally {
-      state = { ...state, user: null, authChecked: true };
-      emit();
-    }
+    } catch {}
+
+    state.user = null;
+    state.cart = [];
+    state.wishlist = [];
+    state.authChecked = true;
+
+    emit();
   },
 
   async checkAuth() {
     try {
       const res = await api.getMe();
-      const user = res.user || (res as any).data;
-      if (user && user.id) {
-        state = { ...state, user, authChecked: true };
-      } else {
-        // If server responds without error but has no user, set authChecked to true without wiping local user
-        state = { ...state, authChecked: true };
+
+      if (!res.user) {
+        state.user = null;
+        state.cart = [];
+        state.wishlist = [];
+        state.authChecked = true;
+        emit();
+        return;
       }
+
+      state.user = res.user;
+
+      state.cart = await cartApi.getAll();
+      state.wishlist = await wishlistApi.getAll();
+
+      state.authChecked = true;
+
+      emit();
     } catch {
-      // Keep existing persisted local user on network or session check error
-      state = { ...state, authChecked: true };
+      state.user = null;
+      state.cart = [];
+      state.wishlist = [];
+      state.authChecked = true;
+
+      emit();
     }
-    emit();
   },
 };
 
-// Check session on startup
 if (typeof window !== "undefined") {
   actions.checkAuth();
 }
-
 export let LIVE_RATES: Record<string, number> = {
   "24K": 14493,
   "22K": 13285,
@@ -194,20 +221,45 @@ export let LIVE_RATES: Record<string, number> = {
 };
 
 export function setLiveRates(newRates: Record<string, number>) {
-  LIVE_RATES = { ...LIVE_RATES, ...newRates };
+  LIVE_RATES = {
+    ...LIVE_RATES,
+    ...newRates,
+  };
+
   emit();
 }
 
-export function computeBreakdown(weight: number, purity: string, makingPct = 12, gstPct = 3) {
+export function computeBreakdown(
+  weight: number,
+  purity: string,
+  makingPct = 12,
+  gstPct = 3
+) {
   const base24K = LIVE_RATES["24K"] ?? 14493;
+
   let rate = LIVE_RATES[purity];
 
   if (!rate) {
-    if (purity === "22K") rate = base24K * (22 / 24);
-    else if (purity === "18K") rate = base24K * (18 / 24);
-    else if (purity === "14K") rate = base24K * (14 / 24);
-    else if (purity === "9K") rate = base24K * (9 / 24);
-    else rate = base24K;
+    switch (purity) {
+      case "22K":
+        rate = base24K * (22 / 24);
+        break;
+
+      case "18K":
+        rate = base24K * (18 / 24);
+        break;
+
+      case "14K":
+        rate = base24K * (14 / 24);
+        break;
+
+      case "9K":
+        rate = base24K * (9 / 24);
+        break;
+
+      default:
+        rate = base24K;
+    }
   }
 
   const metalValue = Math.round((weight || 0) * rate);
@@ -215,9 +267,17 @@ export function computeBreakdown(weight: number, purity: string, makingPct = 12,
   const subtotal = metalValue + making;
   const gst = Math.round(subtotal * (gstPct / 100));
   const total = subtotal + gst;
-  return { metalValue, making, gst, total, makingPct, gstPct };
+
+  return {
+    metalValue,
+    making,
+    gst,
+    total,
+    makingPct,
+    gstPct,
+  };
 }
 
-export function formatINR(n: number) {
-  return "₹" + (n || 0).toLocaleString("en-IN");
+export function formatINR(amount: number) {
+  return `₹${(amount || 0).toLocaleString("en-IN")}`;
 }

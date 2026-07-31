@@ -18,10 +18,15 @@ interface ApiResponse<T> {
   success?: boolean;
   message?: string;
   token?: string;
+
   user?: T;
   data?: T;
+
   addresses?: T;
   address?: T;
+
+  wishlist?: T;
+  cart?: T;
 }
 
 interface User {
@@ -67,6 +72,11 @@ export interface AddressItem {
   isDefault?: boolean;
 }
 
+export interface CartItem {
+  productId: string;
+  qty: number;
+}
+
 const cache = {
   products: new Map<string, ProductItem[]>(),
   categories: new Map<string, Category[]>(),
@@ -101,11 +111,7 @@ async function request<T>(
 }
 
 export const api = {
-  register: async (
-    name: string,
-    email: string,
-    password: string
-  ) => {
+  async register(name: string, email: string, password: string) {
     const res = await request<User>("/auth/register", {
       method: "POST",
       body: JSON.stringify({
@@ -122,10 +128,7 @@ export const api = {
     return res;
   },
 
-  login: async (
-    email: string,
-    password: string
-  ) => {
+  async login(email: string, password: string) {
     const res = await request<User>("/auth/login", {
       method: "POST",
       body: JSON.stringify({
@@ -141,18 +144,25 @@ export const api = {
     return res;
   },
 
-  logout: async () => {
-    removeToken();
+  async logout() {
+    try {
+      await request("/auth/logout", {
+        method: "POST",
+      });
+    } finally {
+      removeToken();
+    }
 
     return {
       success: true,
     };
   },
 
-  getMe: () =>
-    request<User>("/auth/me", {
+  getMe() {
+    return request<User>("/auth/me", {
       method: "GET",
-    }),
+    });
+  },
 };
 
 export const addressesApi = {
@@ -190,8 +200,74 @@ export const addressesApi = {
   },
 };
 
+export const wishlistApi = {
+  async getAll(): Promise<string[]> {
+    const res = await request<string[]>("/wishlist", {
+      method: "GET",
+    });
+
+    return res.wishlist ?? [];
+  },
+
+  async add(productId: string) {
+    return request("/wishlist", {
+      method: "POST",
+      body: JSON.stringify({
+        productId,
+      }),
+    });
+  },
+
+  async remove(productId: string) {
+    return request(`/wishlist/${productId}`, {
+      method: "DELETE",
+    });
+  },
+};
+
+export const cartApi = {
+  async getAll(): Promise<CartItem[]> {
+    const res = await request<CartItem[]>("/cart", {
+      method: "GET",
+    });
+
+    return res.cart ?? [];
+  },
+
+  async add(productId: string, qty = 1) {
+    return request("/cart", {
+      method: "POST",
+      body: JSON.stringify({
+        productId,
+        qty,
+      }),
+    });
+  },
+
+  async update(productId: string, qty: number) {
+    return request(`/cart/${productId}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        qty,
+      }),
+    });
+  },
+
+  async remove(productId: string) {
+    return request(`/cart/${productId}`, {
+      method: "DELETE",
+    });
+  },
+
+  async clear() {
+    return request("/cart", {
+      method: "DELETE",
+    });
+  },
+};
+
 export const productsApi = {
-  getByMetal: async (metal: "Gold" | "Silver") => {
+  async getByMetal(metal: "Gold" | "Silver") {
     if (cache.products.has(metal)) {
       return cache.products.get(metal)!;
     }
@@ -219,7 +295,7 @@ export const productsApi = {
     return products;
   },
 
-  getById: async (id: string) => {
+  async getById(id: string): Promise<ProductItem> {
     const token = getToken();
 
     const res = await fetch(`${API_URL}/products/${id}`, {
@@ -236,22 +312,22 @@ export const productsApi = {
       throw new Error(data.message || "Product not found");
     }
 
-    const rawProduct = data.product || data;
+    const raw = data.product || data;
 
     return {
-      ...rawProduct,
-      weight: rawProduct.weight ?? rawProduct.grossWeight ?? 0,
+      ...raw,
+      weight: raw.weight ?? raw.grossWeight ?? 0,
       description:
-        rawProduct.description ??
-        rawProduct.desc ??
-        rawProduct.details ??
+        raw.description ??
+        raw.desc ??
+        raw.details ??
         "",
-    } as ProductItem;
+    };
   },
 };
 
 export const categoriesApi = {
-  getByMetal: async (metal: "Gold" | "Silver") => {
+  async getByMetal(metal: "Gold" | "Silver") {
     if (cache.categories.has(metal)) {
       return cache.categories.get(metal)!;
     }

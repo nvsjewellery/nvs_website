@@ -15,6 +15,9 @@ const ratesRoutes = require("./routes/ratesRoutes");
 const addressRoutes = require("./routes/addressRoutes");
 const { protect } = require("./middleware/authMiddleware");
 
+const wishlistRoutes = require("./routes/wishlistRoutes");
+const cartRoutes = require("./routes/cartRoutes");
+
 const app = express();
 
 const allowedOrigins = [
@@ -59,6 +62,8 @@ app.use("/api/products", productRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/rates", ratesRoutes);
 app.use("/api/addresses", protect, addressRoutes);
+app.use("/api/wishlist", protect, wishlistRoutes);
+app.use("/api/cart", protect, cartRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

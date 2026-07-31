@@ -13,7 +13,11 @@ model User {
   email     String    @unique
   password  String
   phone     String?
-  addresses Address[] // Added relation to saved addresses
+
+  addresses Address[]
+  wishlist  Wishlist[]
+  cart      Cart[]
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
@@ -24,15 +28,50 @@ model Address {
   id          String   @id @default(cuid())
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  label       String   @default("Home") // Home, Work, Other
+
+  label       String   @default("Home")
   addressLine String
   city        String
   pincode     String
   isDefault   Boolean  @default(false)
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@map("addresses")
+}
+
+model Wishlist {
+  id        String   @id @default(cuid())
+
+  userId    String
+  productId String
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+  @@map("wishlists")
+}
+
+model Cart {
+  id        String   @id @default(cuid())
+
+  userId    String
+  productId String
+
+  qty Int @default(1)
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, productId])
+  @@map("cart")
 }
 
 model Product {
@@ -54,9 +93,14 @@ model Product {
   status           ProductStatus @default(Draft)
   stock            Int           @default(0)
   sold             Int           @default(0)
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
-  gstRate          Float?        @default(3)
+
+  wishlist Wishlist[]
+  cart      Cart[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  gstRate Float? @default(3)
 
   @@map("products")
 }
@@ -74,6 +118,7 @@ model Category {
   updatedAt DateTime @updatedAt
 
   @@unique([metal, slug])
+
   @@map("categories")
 }
 
