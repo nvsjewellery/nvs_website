@@ -219,7 +219,7 @@ export function Checkout() {
           localStorage.getItem("authToken") ||
           localStorage.getItem("jwt");
 
-        const res = await fetch(`${API_BASE_URL}/api/auth/profile`, {
+        const res = await fetch(`${API_BASE_URL}/auth/profile`, {
           method: "PATCH",
           headers: {
             "Content-Type": "application/json",
