@@ -24,41 +24,38 @@ interface LiveRatesResponse {
   };
 }
 
+type RateRow = { label: string; purity: string; rate: number; desc: string };
+
 export function LiveRatesPage() {
   const [loading, setLoading] = useState(true);
   const [updatedAt, setUpdatedAt] = useState<string>("");
   const [source, setSource] = useState<string>("");
 
-  // Rates State (per gram in ₹)
-  const [goldRates, setGoldRates] = useState<{ label: string; purity: string; rate: number; desc: string }[]>([]);
-  const [silverRates, setSilverRates] = useState<{ label: string; purity: string; rate: number; desc: string }[]>([]);
+  const [goldRates, setGoldRates] = useState<RateRow[]>([]);
+  const [silverRates, setSilverRates] = useState<RateRow[]>([]);
 
   const fetchRates = () => {
     setLoading(true);
     fetch("https://suvarnagold-16e5.vercel.app/api/rates")
       .then((res) => res.json())
       .then((data: LiveRatesResponse) => {
-        // Helper to parse numbers or ₹ strings
         const parseVal = (v: any) =>
           typeof v === "number" ? v : Number(String(v ?? 0).replace(/[₹,]/g, ""));
 
-        // Extract Gold Rates (checks nested data.rates or root properties)
         const g24 = data.rates?.gold?.["24K"] ?? parseVal(data.gold24) ?? 14493;
         const g22 = data.rates?.gold?.["22K"] ?? parseVal(data.gold22) ?? Math.round(g24 * (22 / 24));
         const g18 = data.rates?.gold?.["18K"] ?? parseVal(data.gold18) ?? Math.round(g24 * (18 / 24));
         const g14 = data.rates?.gold?.["14K"] ?? Math.round(g24 * (14 / 24));
         const g9 = data.rates?.gold?.["9K"] ?? Math.round(g24 * (9 / 24));
 
-        // Extract Silver Base Rate (999 Fine Silver Base ~ 240)
-        const silverBase =
-  data.rates?.silver?.["99"]
-    ? Math.round(data.rates.silver["99"] / 0.99)
-    : parseVal(data.silver) || 240;
+        const silverBase = data.rates?.silver?.["99"]
+          ? Math.round(data.rates.silver["99"] / 0.99)
+          : parseVal(data.silver) || 240;
 
-const s99 = Math.round(silverBase * 0.99);
-const s835 = Math.round(silverBase * 0.835);
-const s80 = Math.round(silverBase * 0.80);
-const s75 = Math.round(silverBase * 0.75);
+        const s99 = Math.round(silverBase * 0.99);
+        const s835 = Math.round(silverBase * 0.835);
+        const s80 = Math.round(silverBase * 0.8);
+        const s75 = Math.round(silverBase * 0.75);
 
         setGoldRates([
           { label: "24K Gold", purity: "99.9% Pure Gold", rate: g24, desc: "Bullion & Gold Coins" },
@@ -69,38 +66,20 @@ const s75 = Math.round(silverBase * 0.75);
         ]);
 
         setSilverRates([
-  {
-    label: "990 Fine Silver (99%)",
-    purity: "99.0% Pure Silver",
-    rate: s99,
-    desc: "Silver Coins & Fine Bullion",
-  },
-  {
-    label: "83.5 Silver",
-    purity: "83.5% Fine",
-    rate: s835,
-    desc: "Articles & Utensils",
-  },
-  {
-    label: "800 Silver (80%)",
-    purity: "80.0% Purity",
-    rate: s80,
-    desc: "Payal & Traditional Wear",
-  },
-  {
-    label: "750 Silver (75%)",
-    purity: "75.0% Purity",
-    rate: s75,
-    desc: "Ornaments & Crafts",
-  },
-]);
+          { label: "990 Fine Silver (99%)", purity: "99.0% Pure Silver", rate: s99, desc: "Silver Coins & Fine Bullion" },
+          { label: "83.5 Silver", purity: "83.5% Fine", rate: s835, desc: "Articles & Utensils" },
+          { label: "800 Silver (80%)", purity: "80.0% Purity", rate: s80, desc: "Payal & Traditional Wear" },
+          { label: "750 Silver (75%)", purity: "75.0% Purity", rate: s75, desc: "Ornaments & Crafts" },
+        ]);
 
         const rawSource = data.source || data.rates?.source;
         if (rawSource) setSource(rawSource);
 
         const rawUpdatedAt = data.updatedAt || data.rates?.updatedAt;
         if (rawUpdatedAt) {
-          setUpdatedAt(new Date(rawUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+          setUpdatedAt(
+            new Date(rawUpdatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          );
         }
       })
       .catch((err) => console.error("Error fetching live rates:", err))
@@ -114,7 +93,10 @@ const s75 = Math.round(silverBase * 0.75);
   return (
     <Layout>
       {/* Header Banner */}
-      <section style={{ backgroundColor: "var(--cream)" }} className="border-b border-[color:var(--gold)]/20 py-10 md:py-14">
+      <section
+        style={{ backgroundColor: "var(--cream)" }}
+        className="border-b border-[color:var(--gold)]/20 py-10 md:py-14"
+      >
         <div className="max-w-5xl mx-auto px-4 text-center">
           <p className="label-caps text-[color:var(--gold-dark)] text-xs font-semibold tracking-widest uppercase">
             Certified Purity & Pricing
@@ -130,7 +112,7 @@ const s75 = Math.round(silverBase * 0.75);
 
       <OrnamentalDivider />
 
-      <section className="max-w-5xl mx-auto px-4 py-8 space-y-8">
+      <section className="max-w-6xl mx-auto px-4 py-8 space-y-8">
         {/* Status & Refresh Bar */}
         <div className="flex flex-col sm:flex-row items-center justify-between bg-[color:var(--panel)] border border-[color:var(--border)] px-6 py-4 rounded-xl text-sm gap-3">
           <div className="flex items-center gap-2.5 text-[color:var(--espresso)]">
@@ -154,29 +136,35 @@ const s75 = Math.round(silverBase * 0.75);
         </div>
 
         {/* Rates Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
           {/* Gold Section */}
-          <div className="bg-white border border-[color:var(--border)] rounded-2xl p-6 shadow-sm">
-            <div className="flex items-center justify-between border-b border-[color:var(--border)] pb-4 mb-6">
+          <div className="bg-white border border-[color:var(--border)] rounded-2xl p-8 shadow-sm">
+            <div className="flex items-center justify-between border-b border-[color:var(--border)] pb-5 mb-7">
               <div>
                 <span className="text-xs uppercase tracking-widest text-[color:var(--gold-dark)] font-semibold">
                   Gold Rates
                 </span>
-                <h2 className="text-2xl font-serif text-[color:var(--espresso)]">Yellow Metal</h2>
+                <h2 className="text-3xl font-serif text-[color:var(--espresso)]">Yellow Metal</h2>
               </div>
-              <span className="text-2xl">👑</span>
+              <span className="text-3xl">👑</span>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-4">
               {goldRates.map((item) => (
-                <div key={item.label} className="flex items-center justify-between p-3.5 rounded-xl bg-[color:var(--cream)]/50 border border-[color:var(--border)]">
+                <div
+                  key={item.label}
+                  className="flex items-center justify-between p-5 rounded-xl bg-[color:var(--cream)]/50 border border-[color:var(--border)]"
+                >
                   <div>
-                    <h3 className="font-serif font-semibold text-[color:var(--espresso)]">{item.label}</h3>
-                    <p className="text-xs text-[color:var(--muted-foreground)]">{item.purity} · {item.desc}</p>
+                    <h3 className="font-serif font-semibold text-[color:var(--espresso)] text-lg">
+                      {item.label}
+                    </h3>
+                    <p className="text-xs text-[color:var(--muted-foreground)] mt-0.5">
+                      {item.purity} · {item.desc}
+                    </p>
                   </div>
                   <div className="text-right">
-                    <span className="text-lg font-sans font-semibold text-[color:var(--espresso)] tracking-normal">
+                    <span className="text-xl font-sans font-semibold text-[color:var(--espresso)] tracking-normal">
                       {formatINR(item.rate)}
                     </span>
                     <span className="text-xs font-sans text-[color:var(--muted-foreground)] block">/ gram</span>
@@ -187,35 +175,33 @@ const s75 = Math.round(silverBase * 0.75);
           </div>
 
           {/* Silver Section */}
-          <div className="bg-white border border-[color:var(--border)] rounded-2xl p-6 shadow-sm">
-            <div className="flex items-center justify-between border-b border-[color:var(--border)] pb-4 mb-6">
+          <div className="bg-white border border-[color:var(--border)] rounded-2xl p-8 shadow-sm">
+            <div className="flex items-center justify-between border-b border-[color:var(--border)] pb-5 mb-7">
               <div>
                 <span className="text-xs uppercase tracking-widest text-[color:var(--muted-foreground)] font-semibold">
                   Silver Rates
                 </span>
-                <h2 className="text-2xl font-serif text-[color:var(--espresso)]">White Metal</h2>
+                <h2 className="text-3xl font-serif text-[color:var(--espresso)]">White Metal</h2>
               </div>
-              <span className="text-2xl">✨</span>
+              <span className="text-3xl">✨</span>
             </div>
 
-            <div
-  className="grid gap-3"
-  style={{
-    gridTemplateRows: "repeat(4, 1fr)",
-    height: "100%",
-  }}
->
+            <div className="space-y-4">
               {silverRates.map((item) => (
                 <div
-  key={item.label}
-  className="flex items-center justify-between rounded-xl bg-[color:var(--cream)]/50 border border-[color:var(--border)] px-4 py-3"
->
+                  key={item.label}
+                  className="flex items-center justify-between p-5 rounded-xl bg-[color:var(--cream)]/50 border border-[color:var(--border)]"
+                >
                   <div>
-                    <h3 className="font-serif font-semibold text-[color:var(--espresso)]">{item.label}</h3>
-                    <p className="text-xs text-[color:var(--muted-foreground)]">{item.purity} · {item.desc}</p>
+                    <h3 className="font-serif font-semibold text-[color:var(--espresso)] text-lg">
+                      {item.label}
+                    </h3>
+                    <p className="text-xs text-[color:var(--muted-foreground)] mt-0.5">
+                      {item.purity} · {item.desc}
+                    </p>
                   </div>
                   <div className="text-right">
-                    <span className="text-lg font-sans font-semibold text-[color:var(--espresso)] tracking-normal">
+                    <span className="text-xl font-sans font-semibold text-[color:var(--espresso)] tracking-normal">
                       {formatINR(item.rate)}
                     </span>
                     <span className="text-xs font-sans text-[color:var(--muted-foreground)] block">/ gram</span>
@@ -224,12 +210,14 @@ const s75 = Math.round(silverBase * 0.75);
               ))}
             </div>
           </div>
-
         </div>
 
         {/* Informational Footer Note */}
         <div className="text-center text-xs text-[color:var(--muted-foreground)] border-t border-[color:var(--border)] pt-6 space-y-1">
-          <p>* Prices shown are raw metal values per gram. Product prices on the website include applicable making charges and GST.</p>
+          <p>
+            * Prices shown are raw metal values per gram. Product prices on the website include applicable
+            making charges and GST.
+          </p>
         </div>
       </section>
     </Layout>
