@@ -138,7 +138,7 @@ export function LiveRatesPage() {
         {/* Rates Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
           {/* Gold Section */}
-          <div className="bg-white border border-[color:var(--border)] rounded-2xl p-8 shadow-sm">
+          <div className="bg-white border border-[color:var(--border)] rounded-2xl p-8 shadow-sm flex flex-col h-full">
             <div className="flex items-center justify-between border-b border-[color:var(--border)] pb-5 mb-7">
               <div>
                 <span className="text-xs uppercase tracking-widest text-[color:var(--gold-dark)] font-semibold">
@@ -149,7 +149,7 @@ export function LiveRatesPage() {
               <span className="text-3xl">👑</span>
             </div>
 
-            <div className="space-y-4">
+            <div className="flex-1 flex flex-col justify-between gap-4">
               {goldRates.map((item) => (
                 <div
                   key={item.label}
@@ -175,7 +175,7 @@ export function LiveRatesPage() {
           </div>
 
           {/* Silver Section */}
-          <div className="bg-white border border-[color:var(--border)] rounded-2xl p-8 shadow-sm">
+          <div className="bg-white border border-[color:var(--border)] rounded-2xl p-8 shadow-sm flex flex-col h-full">
             <div className="flex items-center justify-between border-b border-[color:var(--border)] pb-5 mb-7">
               <div>
                 <span className="text-xs uppercase tracking-widest text-[color:var(--muted-foreground)] font-semibold">
@@ -186,7 +186,7 @@ export function LiveRatesPage() {
               <span className="text-3xl">✨</span>
             </div>
 
-            <div className="space-y-4">
+            <div className="flex-1 flex flex-col justify-between gap-4">
               {silverRates.map((item) => (
                 <div
                   key={item.label}
