@@ -17,6 +17,7 @@ const { protect } = require("./middleware/authMiddleware");
 
 const wishlistRoutes = require("./routes/wishlistRoutes");
 const cartRoutes = require("./routes/cartRoutes");
+const reelRoutes = require("./routes/reelRoutes");
 
 const app = express();
 
@@ -63,6 +64,7 @@ app.use("/api/rates", ratesRoutes);
 app.use("/api/addresses", protect, addressRoutes);
 app.use("/api/wishlist", protect, wishlistRoutes);
 app.use("/api/cart", protect, cartRoutes);
+app.use("/api/reels", reelRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

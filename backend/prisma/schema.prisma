@@ -135,6 +135,17 @@ model Discount {
   @@map("discounts")
 }
 
+model Reel {
+  id          String   @id @default(cuid())
+  title       String?
+  instagramUrl String
+  videoUrl    String   // 5-second MP4 video preview URL (uploaded via admin)
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 enum Metal {
   Gold
   Silver
