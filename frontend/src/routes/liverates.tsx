@@ -254,7 +254,7 @@ export function LiveRatesPage() {
 
               <div
                 key={item.label}
-                className="rounded-3xl border border-[color:var(--border)] bg-[color:var(--cream)]/60 px-6 py-5 flex justify-between items-center"
+               className="rounded-3xl border border-[color:var(--border)] bg-[color:var(--cream)]/60 px-6 py-8 flex justify-between items-center"
               >
 
                 <div>
@@ -313,13 +313,13 @@ export function LiveRatesPage() {
 
           {/* IMPORTANT */}
 
-          <div className="flex flex-col flex-1 gap-4">
+          <div className="space-y-4">
 
             {silverRates.map((item) => (
 
               <div
                 key={item.label}
-                className="flex-1 rounded-3xl border border-[color:var(--border)] bg-[color:var(--cream)]/60 px-6 py-5 flex justify-between items-center"
+                className="rounded-3xl border border-[color:var(--border)] bg-[color:var(--cream)]/60 px-6 py-6 flex justify-between items-center"
               >
 
                 <div>
