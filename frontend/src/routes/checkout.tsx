@@ -187,7 +187,7 @@ export function Checkout() {
     return s + itemPrice * i.qty;
   }, 0);
 
-  // Trigger Razorpay Demo Gateway
+  // Trigger Razorpay Demo Gateway & Persist User Phone Number
   async function handlePlaceOrder(e: React.FormEvent) {
     e.preventDefault();
 
@@ -203,15 +203,19 @@ export function Checkout() {
 
     setLoading(true);
 
-    // Save phone number directly via user profile API
+    // Persist user phone number to backend DB via PATCH /api/auth/profile
     try {
       if (user) {
-        await fetch("/api/users/profile", {
+        const token = localStorage.getItem("token");
+        await fetch("/api/auth/profile", {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
           body: JSON.stringify({ phone }),
         });
-        await actions.checkAuth(); // Refresh session/user state
+        await actions.checkAuth(); // Refresh user state in local store
       }
     } catch (err) {
       console.error("Failed to save phone number to profile:", err);

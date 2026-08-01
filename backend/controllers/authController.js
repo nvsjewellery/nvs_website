@@ -51,6 +51,7 @@ const registerUser = asyncHandler(async (req, res) => {
       id: user.id,
       name: user.name,
       email: user.email,
+      phone: user.phone,
     },
   });
 });
@@ -97,6 +98,7 @@ const loginUser = asyncHandler(async (req, res) => {
       id: user.id,
       name: user.name,
       email: user.email,
+      phone: user.phone,
     },
   });
 });
@@ -121,9 +123,43 @@ const getMe = asyncHandler(async (req, res) => {
   });
 });
 
+//
+// UPDATE PROFILE (PHONE)
+//
+const updateProfile = asyncHandler(async (req, res) => {
+  const { phone } = req.body;
+
+  if (!phone) {
+    res.status(400);
+    throw new Error("Phone number is required");
+  }
+
+  const updatedUser = await prisma.user.update({
+    where: {
+      id: req.user.id,
+    },
+    data: {
+      phone,
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      createdAt: true,
+    },
+  });
+
+  res.status(200).json({
+    success: true,
+    user: updatedUser,
+  });
+});
+
 module.exports = {
   registerUser,
   loginUser,
   logoutUser,
   getMe,
+  updateProfile,
 };
