@@ -7,6 +7,7 @@ import { ProductCard } from "@/components/ProductCard";
 import { metalSlug } from "@/lib/products";
 import { productsApi } from "@/lib/api";
 import { type Product } from "@/lib/store";
+import InstagramReelsSection from "@/components/InstagramReelsSection";
 
 // Static asset imports
 import catNecklaces from "@/assets/cat-necklaces.jpg";
@@ -390,7 +391,12 @@ function Home() {
             </div>
           )}
         </div>
-      </section>
+            </section>
+
+      <OrnamentalDivider />
+
+      <InstagramReelsSection />
+
     </Layout>
   );
 }
