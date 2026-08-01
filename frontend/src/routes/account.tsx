@@ -9,6 +9,18 @@ import {
   addressesApi,
 } from "@/lib/api";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+
 export const Route = createFileRoute("/account")({ component: Account });
 
 type WishlistPreviewItem = { id: string; name: string; price: number };
@@ -169,15 +181,40 @@ export function Account() {
             </h1>
             <p className="text-[color:var(--gold-dark)] mt-2">{user.email}</p>
           </div>
-          <button
-            onClick={() => {
-              actions.signOut();
-              nav({ to: "/" });
-            }}
-            className="pill-gold-outline"
-          >
-            Sign Out
-          </button>
+          <AlertDialog>
+  <AlertDialogTrigger asChild>
+    <button className="pill-gold-outline">
+      Sign Out
+    </button>
+  </AlertDialogTrigger>
+
+  <AlertDialogContent>
+    <AlertDialogHeader>
+      <AlertDialogTitle>
+        Sign out?
+      </AlertDialogTitle>
+
+      <AlertDialogDescription>
+        Are you sure you want to sign out of your account?
+      </AlertDialogDescription>
+    </AlertDialogHeader>
+
+    <AlertDialogFooter>
+      <AlertDialogCancel>
+        Cancel
+      </AlertDialogCancel>
+
+      <AlertDialogAction
+        onClick={() => {
+          actions.signOut();
+          nav({ to: "/" });
+        }}
+      >
+        Sign Out
+      </AlertDialogAction>
+    </AlertDialogFooter>
+  </AlertDialogContent>
+</AlertDialog>
         </div>
         <OrnamentalDivider />
 
