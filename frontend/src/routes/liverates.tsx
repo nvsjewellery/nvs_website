@@ -149,11 +149,14 @@ export function LiveRatesPage() {
               <span className="text-3xl">👑</span>
             </div>
 
-            <div className="flex-1 flex flex-col justify-between gap-4">
+            <div
+              className="flex-1 grid gap-4"
+              style={{ gridTemplateRows: `repeat(${goldRates.length || 1}, 1fr)` }}
+            >
               {goldRates.map((item) => (
                 <div
                   key={item.label}
-                  className="flex items-center justify-between p-5 rounded-xl bg-[color:var(--cream)]/50 border border-[color:var(--border)]"
+                  className="flex items-center justify-between px-5 rounded-xl bg-[color:var(--cream)]/50 border border-[color:var(--border)]"
                 >
                   <div>
                     <h3 className="font-serif font-semibold text-[color:var(--espresso)] text-lg">
@@ -186,11 +189,14 @@ export function LiveRatesPage() {
               <span className="text-3xl">✨</span>
             </div>
 
-            <div className="flex-1 flex flex-col justify-between gap-4">
+            <div
+              className="flex-1 grid gap-4"
+              style={{ gridTemplateRows: `repeat(${silverRates.length || 1}, 1fr)` }}
+            >
               {silverRates.map((item) => (
                 <div
                   key={item.label}
-                  className="flex items-center justify-between p-5 rounded-xl bg-[color:var(--cream)]/50 border border-[color:var(--border)]"
+                  className="flex items-center justify-between px-5 rounded-xl bg-[color:var(--cream)]/50 border border-[color:var(--border)]"
                 >
                   <div>
                     <h3 className="font-serif font-semibold text-[color:var(--espresso)] text-lg">
