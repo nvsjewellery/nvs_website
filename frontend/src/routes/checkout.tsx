@@ -1,10 +1,9 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { OrnamentalDivider } from "@/components/OrnamentalDivider";
-import { getProduct } from "@/lib/products";
-import { actions, computeBreakdown, formatINR, useStore } from "@/lib/store";
-import { addressesApi } from "@/lib/api";
+import { addressesApi, productsApi } from "@/lib/api";
+import { actions, computeBreakdown, formatINR, useStore, type Product } from "@/lib/store";
 
 export const Route = createFileRoute("/checkout")({ component: Checkout });
 
@@ -22,20 +21,27 @@ declare global {
   }
 }
 
+// In-memory cache shared across navigations
+const productCache: Record<string, Product> = {};
+
 export function Checkout() {
   const user = useStore((s) => s.user);
   const cart = useStore((s) => s.cart);
   const nav = useNavigate();
 
-  // Phone state
+  // Contact State
   const [phone, setPhone] = useState("");
 
-  // Address state
+  // Product Loading States
+  const [productsMap, setProductsMap] = useState<Record<string, Product>>(productCache);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+
+  // Address States
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string>("");
   const [loadingAddresses, setLoadingAddresses] = useState(false);
 
-  // New Address form states
+  // New Address Form States
   const [showAddForm, setShowAddForm] = useState(false);
   const [label, setLabel] = useState("Home");
   const [addressLine, setAddressLine] = useState("");
@@ -44,7 +50,7 @@ export function Checkout() {
 
   const [loading, setLoading] = useState(false);
 
-  // Load Razorpay Script
+  // Load Razorpay SDK
   useEffect(() => {
     const script = document.createElement("script");
     script.src = "https://checkout.razorpay.com/v1/checkout.js";
@@ -52,7 +58,52 @@ export function Checkout() {
     document.body.appendChild(script);
   }, []);
 
-  // Fetch saved addresses from backend
+  // Fetch full details for all products in cart from backend API
+  const cartKeys = cart.map((c: any) => c.productId).join(",");
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadCartProducts() {
+      const missingIds = cart
+        .map((c: any) => c.productId)
+        .filter((id: string) => !productCache[id]);
+
+      if (missingIds.length === 0) {
+        setProductsMap({ ...productCache });
+        return;
+      }
+
+      setLoadingProducts(true);
+      try {
+        const promises = missingIds.map((id: string) =>
+          productsApi.getById(id).catch(() => null)
+        );
+        const results = await Promise.all(promises);
+
+        results.forEach((p) => {
+          if (p && p.id) {
+            productCache[p.id] = p;
+          }
+        });
+
+        if (isMounted) {
+          setProductsMap({ ...productCache });
+        }
+      } catch (err) {
+        console.error("Failed to load checkout products:", err);
+      } finally {
+        if (isMounted) setLoadingProducts(false);
+      }
+    }
+
+    loadCartProducts();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [cartKeys]);
+
+  // Fetch Saved Addresses from Backend API
   useEffect(() => {
     if (!user) return;
 
@@ -65,7 +116,7 @@ export function Checkout() {
           setSelectedAddressId(data[0].id);
         }
       } catch (err) {
-        console.error("Failed to load saved addresses:", err);
+        console.error("Failed to load addresses:", err);
       } finally {
         setLoadingAddresses(false);
       }
@@ -74,7 +125,7 @@ export function Checkout() {
     loadAddresses();
   }, [user]);
 
-  // Handle saving new address
+  // Handle Inline Add New Address
   const handleAddNewAddress = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!addressLine || !city || !pincode) return;
@@ -101,27 +152,33 @@ export function Checkout() {
     }
   };
 
-  // Resolve Cart Items with details
+  // Build Cart Items with details fetched from Backend API
   const items = cart
-    .map((c) => ({ ...c, p: getProduct(c.productId)! }))
-    .filter((c) => c.p);
+    .map((c: any) => ({
+      ...c,
+      p: productsMap[c.productId],
+    }))
+    .filter((c: any) => Boolean(c.p));
 
-  const subtotal = items.reduce(
-    (s, i) => s + computeBreakdown(i.p.weight, i.p.purity).total * i.qty,
-    0
-  );
+  // Compute Total Price
+  const total = items.reduce((s: number, i: any) => {
+    const weightVal = Number(i.p.weight ?? i.p.grossWeight ?? 0);
+    const bd = computeBreakdown(weightVal, i.p.purity || "22K");
+    const itemPrice = bd?.total ? bd.total : Number(i.p.price || 0);
+    return s + itemPrice * i.qty;
+  }, 0);
 
-  // Handle Place Order -> Razorpay Demo
+  // Trigger Razorpay Demo Gateway
   function handlePlaceOrder(e: React.FormEvent) {
     e.preventDefault();
 
     if (!phone) {
-      alert("Please enter your phone number.");
+      alert("Please enter your mobile phone number.");
       return;
     }
 
     if (!selectedAddressId && !showAddForm) {
-      alert("Please select or enter a shipping address.");
+      alert("Please select a shipping address.");
       return;
     }
 
@@ -132,10 +189,10 @@ export function Checkout() {
 
     const options = {
       key: razorpayKey,
-      amount: subtotal * 100, // Amount in paise
+      amount: total * 100, // Amount in paise
       currency: "INR",
       name: "NVS Jewellery",
-      description: "Jewellery Purchase",
+      description: "Jewellery Purchase Checkout",
       image: "https://nvsjewellery.com/favicon.ico",
       handler: function (response: any) {
         alert(`Payment Successful! Payment ID: ${response.razorpay_payment_id}`);
@@ -183,19 +240,22 @@ export function Checkout() {
         </h1>
         <OrnamentalDivider />
 
-        {items.length === 0 ? (
-          <div className="text-center py-16 bg-white border border-[color:var(--border)] rounded-2xl mt-6">
+        {loadingProducts && items.length === 0 ? (
+          <div className="py-20 text-center">
+            <p className="text-sm text-[color:var(--muted-foreground)]">
+              Loading your product details...
+            </p>
+          </div>
+        ) : items.length === 0 ? (
+          <div className="text-center py-20 bg-white border border-[color:var(--border)] rounded-2xl mt-6">
             <h2 className="font-serif text-2xl text-[color:var(--espresso)]">
               Your cart is empty
             </h2>
             <p className="text-sm text-[color:var(--muted-foreground)] mt-2">
-              Please select a product and click "Buy Now" or "Add to Cart".
+              Please select a product to proceed with checkout.
             </p>
-            <Link
-              to="/gold"
-              className="pill-gold inline-flex mt-6"
-            >
-              Browse Jewellery
+            <Link to="/gold" className="pill-gold inline-flex mt-6">
+              Browse Collection
             </Link>
           </div>
         ) : (
@@ -210,36 +270,46 @@ export function Checkout() {
                   Items to Purchase
                 </h3>
                 <div className="space-y-4 divide-y divide-[color:var(--border)]/60">
-                  {items.map((i) => {
-                    const bd = computeBreakdown(i.p.weight, i.p.purity);
+                  {items.map((i: any) => {
+                    const weightVal = Number(i.p.weight ?? i.p.grossWeight ?? 0);
+                    const bd = computeBreakdown(weightVal, i.p.purity || "22K");
+                    const itemPrice = bd?.total ? bd.total : Number(i.p.price || 0);
+
                     return (
                       <div
                         key={i.productId}
-                        className="pt-4 first:pt-0 flex gap-4 items-center justify-between"
+                        className="pt-4 first:pt-0 flex items-center justify-between gap-4"
                       >
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-4 min-w-0">
                           {i.p.image && (
                             <img
                               src={i.p.image}
                               alt={i.p.name}
-                              className="w-16 h-16 object-cover rounded-xl border border-[color:var(--border)]"
+                              className="w-16 h-16 object-cover rounded-xl border border-[color:var(--border)] bg-[color:var(--panel)] shrink-0"
                             />
                           )}
-                          <div>
-                            <h4 className="font-serif font-medium text-base text-[color:var(--espresso)]">
+                          <div className="min-w-0">
+                            <h4 className="font-serif font-bold text-base text-[color:var(--espresso)] truncate">
                               {i.p.name}
                             </h4>
                             <p className="text-xs text-[color:var(--muted-foreground)] mt-0.5">
-                              Weight: <span className="font-medium text-[color:var(--espresso)]">{i.p.weight}g</span> · Purity: <span className="font-medium text-[color:var(--espresso)]">{i.p.purity}</span>
+                              Weight:{" "}
+                              <span className="font-semibold text-[color:var(--espresso)]">
+                                {weightVal}g
+                              </span>{" "}
+                              · Purity:{" "}
+                              <span className="font-semibold text-[color:var(--espresso)]">
+                                {i.p.purity || "22K"}
+                              </span>
                             </p>
                             <p className="text-xs text-[color:var(--gold-dark)] font-semibold mt-1">
                               Qty: {i.qty}
                             </p>
                           </div>
                         </div>
-                        <div className="text-right">
+                        <div className="text-right shrink-0">
                           <p className="font-bold text-base text-[color:var(--espresso)]">
-                            {formatINR(bd.total * i.qty)}
+                            {formatINR(itemPrice * i.qty)}
                           </p>
                         </div>
                       </div>
@@ -248,13 +318,13 @@ export function Checkout() {
                 </div>
               </div>
 
-              {/* Step 1: Phone Number */}
+              {/* Step 1: Contact Number */}
               <div className="bg-white border border-[color:var(--border)] rounded-2xl p-6 shadow-sm">
                 <h3 className="font-serif text-xl text-[color:var(--espresso)] mb-2">
                   1. Contact Number
                 </h3>
                 <p className="text-xs text-[color:var(--muted-foreground)] mb-4">
-                  Enter your mobile number for order verification & tracking updates.
+                  Enter your mobile phone number for order updates & tracking.
                 </p>
                 <label className="block">
                   <span className="text-xs label-caps text-[color:var(--gold-dark)] font-semibold">
@@ -271,7 +341,7 @@ export function Checkout() {
                 </label>
               </div>
 
-              {/* Step 2: Shipping Address */}
+              {/* Step 2: Saved Shipping Addresses */}
               <div className="bg-white border border-[color:var(--border)] rounded-2xl p-6 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-serif text-xl text-[color:var(--espresso)]">
@@ -387,7 +457,7 @@ export function Checkout() {
               </div>
             </div>
 
-            {/* Sidebar Summary */}
+            {/* Order Summary Sidebar */}
             <div
               style={{ backgroundColor: "var(--panel)" }}
               className="rounded-2xl p-6 h-fit border border-[color:var(--border)] shadow-sm"
@@ -397,8 +467,11 @@ export function Checkout() {
               </h3>
 
               <div className="space-y-3 text-sm divide-y divide-[color:var(--border)]/60">
-                {items.map((i) => {
-                  const bd = computeBreakdown(i.p.weight, i.p.purity);
+                {items.map((i: any) => {
+                  const weightVal = Number(i.p.weight ?? i.p.grossWeight ?? 0);
+                  const bd = computeBreakdown(weightVal, i.p.purity || "22K");
+                  const itemPrice = bd?.total ? bd.total : Number(i.p.price || 0);
+
                   return (
                     <div
                       key={i.productId}
@@ -409,11 +482,11 @@ export function Checkout() {
                           {i.p.name}
                         </p>
                         <p className="text-xs text-[color:var(--muted-foreground)]">
-                          {i.p.weight}g · {i.p.purity} × {i.qty}
+                          {weightVal}g · {i.p.purity || "22K"} × {i.qty}
                         </p>
                       </div>
                       <span className="font-semibold">
-                        {formatINR(bd.total * i.qty)}
+                        {formatINR(itemPrice * i.qty)}
                       </span>
                     </div>
                   );
@@ -424,7 +497,7 @@ export function Checkout() {
 
               <div className="flex justify-between font-bold text-lg text-[color:var(--espresso)]">
                 <span>Total Payable</span>
-                <span>{formatINR(subtotal)}</span>
+                <span>{formatINR(total)}</span>
               </div>
 
               <button
