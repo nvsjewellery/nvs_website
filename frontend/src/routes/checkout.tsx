@@ -188,6 +188,7 @@ export function Checkout() {
   }, 0);
 
   // Trigger Razorpay Demo Gateway & Persist User Phone Number
+  // Trigger Razorpay Demo Gateway & Persist User Phone Number
   async function handlePlaceOrder(e: React.FormEvent) {
     e.preventDefault();
 
@@ -203,11 +204,22 @@ export function Checkout() {
 
     setLoading(true);
 
-    // Persist user phone number to backend DB via PATCH /api/auth/profile
-    try {
-      if (user) {
-        const token = localStorage.getItem("token");
-        await fetch("/api/auth/profile", {
+    // 1. Determine Backend URL
+    const API_BASE_URL =
+      import.meta.env.VITE_API_URL ||
+      (window.location.hostname === "localhost"
+        ? "http://localhost:5000"
+        : "https://nvs-website-backend.vercel.app"); // adjust to your actual backend domain
+
+    // 2. Persist user phone number to backend DB via PATCH /api/auth/profile
+    if (user) {
+      try {
+        const token =
+          localStorage.getItem("token") ||
+          localStorage.getItem("authToken") ||
+          localStorage.getItem("jwt");
+
+        const res = await fetch(`${API_BASE_URL}/api/auth/profile`, {
           method: "PATCH",
           headers: {
             "Content-Type": "application/json",
@@ -215,12 +227,29 @@ export function Checkout() {
           },
           body: JSON.stringify({ phone }),
         });
-        await actions.checkAuth(); // Refresh user state in local store
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          console.error("Failed to update profile phone:", data);
+          alert(`Failed to save phone number: ${data.message || data.error || "Unauthorized"}`);
+          setLoading(false);
+          return; // Stop execution if DB save fails
+        }
+
+        // Refresh user store if checkAuth handler exists
+        if (actions.checkAuth) {
+          await actions.checkAuth();
+        }
+      } catch (err) {
+        console.error("Failed to save phone number to profile:", err);
+        alert("Network error: Could not reach backend server to save phone number.");
+        setLoading(false);
+        return;
       }
-    } catch (err) {
-      console.error("Failed to save phone number to profile:", err);
     }
 
+    // 3. Launch Razorpay Gateway
     const razorpayKey = "rzp_test_TIZNsDeMd9h0Dx";
     const selectedAddr = addresses.find((a) => a.id === selectedAddressId);
 
