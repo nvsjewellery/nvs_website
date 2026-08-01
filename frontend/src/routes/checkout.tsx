@@ -29,8 +29,15 @@ export function Checkout() {
   const cart = useStore((s) => s.cart);
   const nav = useNavigate();
 
-  // Contact State
-  const [phone, setPhone] = useState("");
+  // Contact State (Pre-filled with user.phone if available)
+  const [phone, setPhone] = useState(user?.phone || "");
+
+  // Update local phone state if user object loads asynchronously
+  useEffect(() => {
+    if (user?.phone && !phone) {
+      setPhone(user.phone);
+    }
+  }, [user]);
 
   // Product Loading States
   const [productsMap, setProductsMap] = useState<Record<string, Product>>(productCache);
@@ -181,7 +188,7 @@ export function Checkout() {
   }, 0);
 
   // Trigger Razorpay Demo Gateway
-  function handlePlaceOrder(e: React.FormEvent) {
+  async function handlePlaceOrder(e: React.FormEvent) {
     e.preventDefault();
 
     if (!phone) {
@@ -196,6 +203,20 @@ export function Checkout() {
 
     setLoading(true);
 
+    // Save phone number directly via user profile API
+    try {
+      if (user) {
+        await fetch("/api/users/profile", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone }),
+        });
+        await actions.checkAuth(); // Refresh session/user state
+      }
+    } catch (err) {
+      console.error("Failed to save phone number to profile:", err);
+    }
+
     const razorpayKey = "rzp_test_TIZNsDeMd9h0Dx";
     const selectedAddr = addresses.find((a) => a.id === selectedAddressId);
 
@@ -205,7 +226,7 @@ export function Checkout() {
       currency: "INR",
       name: "NVS Jewellery",
       description: "Jewellery Purchase Checkout",
-      image: "https://nvsjewellery.com/favicon.ico",
+      image: "/favicon.ico",
       handler: function (response: any) {
         alert(`Payment Successful! Payment ID: ${response.razorpay_payment_id}`);
         actions.clearCart();
