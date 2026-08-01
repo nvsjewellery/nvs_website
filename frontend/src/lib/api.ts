@@ -164,6 +164,13 @@ export const api = {
       method: "GET",
     });
   },
+
+  updateProfile(data: { phone?: string; name?: string }) {
+    return request<User>("/auth/profile", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
 };
 
 export const addressesApi = {

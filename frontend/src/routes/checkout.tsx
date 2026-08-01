@@ -189,114 +189,89 @@ export function Checkout() {
 
   // Trigger Razorpay Demo Gateway & Persist User Phone Number
   // Trigger Razorpay Demo Gateway & Persist User Phone Number
-  async function handlePlaceOrder(e: React.FormEvent) {
-    e.preventDefault();
+  // Import api along with actions
+import { api, actions } from "@/lib/store"; // or "@/lib/api"
 
-    if (!phone) {
-      alert("Please enter your mobile phone number.");
-      return;
-    }
+async function handlePlaceOrder(e: React.FormEvent) {
+  e.preventDefault();
 
-    if (!selectedAddressId && !showAddForm) {
-      alert("Please select a shipping address.");
-      return;
-    }
+  if (!phone) {
+    alert("Please enter your mobile phone number.");
+    return;
+  }
 
-    setLoading(true);
+  if (!selectedAddressId && !showAddForm) {
+    alert("Please select a shipping address.");
+    return;
+  }
 
-    // 1. Determine Backend URL
-    const API_BASE_URL =
-      import.meta.env.VITE_API_URL ||
-      (window.location.hostname === "localhost"
-        ? "http://localhost:5000"
-        : "https://nvs-website-backend.vercel.app"); // adjust to your actual backend domain
+  setLoading(true);
 
-    // 2. Persist user phone number to backend DB via PATCH /api/auth/profile
-    if (user) {
-      try {
-        const token =
-          localStorage.getItem("token") ||
-          localStorage.getItem("authToken") ||
-          localStorage.getItem("jwt");
+  // 1. Save phone number using the centralized API helper (uses "nvs-token")
+  if (user) {
+    try {
+      const res = await api.updateProfile({ phone });
 
-        const res = await fetch(`${API_BASE_URL}/auth/profile`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ phone }),
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          console.error("Failed to update profile phone:", data);
-          alert(`Failed to save phone number: ${data.message || data.error || "Unauthorized"}`);
-          setLoading(false);
-          return; // Stop execution if DB save fails
-        }
-
-        // Refresh user store if checkAuth handler exists
-        if (actions.checkAuth) {
-          await actions.checkAuth();
-        }
-      } catch (err) {
-        console.error("Failed to save phone number to profile:", err);
-        alert("Network error: Could not reach backend server to save phone number.");
-        setLoading(false);
-        return;
+      // Refresh store with updated user details
+      if (actions.checkAuth) {
+        await actions.checkAuth();
       }
-    }
-
-    // 3. Launch Razorpay Gateway
-    const razorpayKey = "rzp_test_TIZNsDeMd9h0Dx";
-    const selectedAddr = addresses.find((a) => a.id === selectedAddressId);
-
-    const options = {
-      key: razorpayKey,
-      amount: total * 100, // Amount in paise
-      currency: "INR",
-      name: "NVS Jewellery",
-      description: "Jewellery Purchase Checkout",
-      image: "/favicon.ico",
-      handler: function (response: any) {
-        alert(`Payment Successful! Payment ID: ${response.razorpay_payment_id}`);
-        actions.clearCart();
-        nav({ to: "/account" });
-      },
-      prefill: {
-        name: user?.name || "Customer",
-        email: user?.email || "customer@nvsjewellery.com",
-        contact: phone,
-      },
-      notes: {
-        shipping_address: selectedAddr
-          ? `${selectedAddr.addressLine}, ${selectedAddr.city} - ${selectedAddr.pincode}`
-          : "N/A",
-      },
-      theme: {
-        color: "#B8860B",
-      },
-      modal: {
-        ondismiss: function () {
-          setLoading(false);
-        },
-      },
-    };
-
-    if (window.Razorpay) {
-      const rzp = new window.Razorpay(options);
-      rzp.open();
-    } else {
-      alert("Redirecting to Razorpay Test Gateway...");
-      setTimeout(() => {
-        actions.clearCart();
-        alert("Demo Payment Completed Successfully!");
-        nav({ to: "/account" });
-      }, 1000);
+    } catch (err: any) {
+      console.error("Failed to save phone number to profile:", err);
+      alert(`Failed to save phone number: ${err.message || "Unauthorized"}`);
+      setLoading(false);
+      return; // Stop if DB update fails
     }
   }
+
+  // 2. Open Razorpay Gateway
+  const razorpayKey = "rzp_test_TIZNsDeMd9h0Dx";
+  const selectedAddr = addresses.find((a) => a.id === selectedAddressId);
+
+  const options = {
+    key: razorpayKey,
+    amount: total * 100,
+    currency: "INR",
+    name: "NVS Jewellery",
+    description: "Jewellery Purchase Checkout",
+    image: "/favicon.ico",
+    handler: function (response: any) {
+      alert(`Payment Successful! Payment ID: ${response.razorpay_payment_id}`);
+      actions.clearCart();
+      nav({ to: "/account" });
+    },
+    prefill: {
+      name: user?.name || "Customer",
+      email: user?.email || "customer@nvsjewellery.com",
+      contact: phone,
+    },
+    notes: {
+      shipping_address: selectedAddr
+        ? `${selectedAddr.addressLine}, ${selectedAddr.city} - ${selectedAddr.pincode}`
+        : "N/A",
+    },
+    theme: {
+      color: "#B8860B",
+    },
+    modal: {
+      ondismiss: function () {
+        setLoading(false);
+      },
+    },
+  };
+
+  if (window.Razorpay) {
+    const rzp = new window.Razorpay(options);
+    rzp.open();
+  } else {
+    alert("Redirecting to Razorpay Test Gateway...");
+    setTimeout(() => {
+      actions.clearCart();
+      alert("Demo Payment Completed Successfully!");
+      nav({ to: "/account" });
+    }, 1000);
+  }
+}
 
   return (
     <Layout>
