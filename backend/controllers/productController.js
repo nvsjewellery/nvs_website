@@ -10,11 +10,13 @@ async function toFrontendShape(p) {
     metal: p.metal,
     sub: p.category,
     purity: p.purity,
-    weight: pricing.net ?? p.grossWeight ?? 0,
+    weight: pricing.net,
     price: pricing.total,
+    metalValue: pricing.metalValue,
+    making: pricing.making,
+    gst: pricing.gst,
     gemstone: (p.stoneCost ?? 0) > 0 ? "Diamond" : "None",
     image: p.image,
-    description: p.description ?? "", // <-- ADDED THIS LINE
   };
 }
 

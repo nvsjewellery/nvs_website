@@ -5,7 +5,7 @@ import { Layout } from "@/components/Layout";
 import { OrnamentalDivider } from "@/components/OrnamentalDivider";
 import { metalSlug } from "@/lib/products";
 import { productsApi } from "@/lib/api";
-import { actions, computeBreakdown, formatINR, useStore } from "@/lib/store";
+import { actions, formatINR, useStore } from "@/lib/store";
 
 export const Route = createFileRoute("/product/$id")({
   component: ProductPage,
@@ -22,36 +22,29 @@ export const Route = createFileRoute("/product/$id")({
 
 function ProductPage() {
   const rawData = Route.useLoaderData() as any;
-  // Handle unwrapping in case backend sends { product: { ... } } or raw object
   const p = rawData?.product || rawData || {};
 
   const [qty, setQty] = useState(1);
   const wishlist = useStore((s) => s.wishlist);
   const saved = wishlist.includes(p?.id);
 
-  // Extract unique product images safely
   const productImages = useMemo(() => {
-    const rawList = Array.isArray(p?.images) && p.images.length > 0
-      ? p.images
-      : [p?.image];
+    const rawList = Array.isArray(p?.images) && p.images.length > 0 ? p.images : [p?.image];
     return Array.from(new Set(rawList.filter(Boolean)));
   }, [p]);
 
-  // Track active selected main image
   const [selectedImg, setSelectedImg] = useState<string | null>(null);
   const currentImage = selectedImg || productImages[0] || p?.image || "";
 
-  // Extract weight and calculate breakdown
   const weightVal = Number(p?.weight ?? p?.grossWeight ?? 0);
-  const bd = computeBreakdown(weightVal, p?.purity || "22K");
 
-  // Synchronize price: prioritize dynamic live calculated total, fallback to database price
-  const displayPrice = bd?.total ? bd.total : Number(p?.price || 0);
+  // Trust the backend's numbers completely — no local recomputation, no rate guessing.
+  const total = Number(p?.price ?? 0);
+  const metalValue = Number(p?.metalValue ?? 0);
+  const making = Number(p?.making ?? 0);
+  const gst = Number(p?.gst ?? 0);
 
-  // Safely extract description string from all potential fields
-  const rawDesc = String(
-    p?.description || p?.desc || p?.details || p?.summary || ""
-  ).trim();
+  const rawDesc = String(p?.description || p?.desc || p?.details || p?.summary || "").trim();
 
   return (
     <Layout>
@@ -63,29 +56,27 @@ function ProductPage() {
 
       <section className="max-w-7xl mx-auto px-4 grid grid-cols-1 lg:grid-cols-2 gap-10">
         <div>
-          {/* Main Selected Image */}
           <div className="aspect-square bg-[color:var(--panel)] rounded-2xl overflow-hidden border border-[color:var(--border)]">
             <img src={currentImage} alt={p.name} className="w-full h-full object-cover" />
           </div>
 
-          {/* Render thumbnails ONLY if there are multiple unique images */}
           {productImages.length > 1 && (
-  <div className="grid grid-cols-4 gap-3 mt-3">
-    {productImages.map((imgUrl, i) => (
-      <div
-        key={i}
-        onClick={() => setSelectedImg(String(imgUrl))}
-        className={`aspect-square bg-[color:var(--panel)] rounded-lg overflow-hidden border cursor-pointer transition-colors ${
-          currentImage === imgUrl
-            ? "border-[color:var(--gold)] ring-1 ring-[color:var(--gold)]"
-            : "border-[color:var(--border)] hover:border-[color:var(--gold)]"
-        }`}
-      >
-        <img src={String(imgUrl)} alt="" className="w-full h-full object-cover" />
-      </div>
-    ))}
-  </div>
-)}
+            <div className="grid grid-cols-4 gap-3 mt-3">
+              {productImages.map((imgUrl, i) => (
+                <div
+                  key={i}
+                  onClick={() => setSelectedImg(String(imgUrl))}
+                  className={`aspect-square bg-[color:var(--panel)] rounded-lg overflow-hidden border cursor-pointer transition-colors ${
+                    currentImage === imgUrl
+                      ? "border-[color:var(--gold)] ring-1 ring-[color:var(--gold)]"
+                      : "border-[color:var(--border)] hover:border-[color:var(--gold)]"
+                  }`}
+                >
+                  <img src={String(imgUrl)} alt="" className="w-full h-full object-cover" />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div>
@@ -98,9 +89,8 @@ function ProductPage() {
             <span className="text-sm text-[color:var(--muted-foreground)]">{weightVal} g</span>
           </div>
           <div className="mt-6">
-            {/* Display matched price */}
             <div className="text-4xl font-serif text-[color:var(--gold-dark)] font-bold">
-              {formatINR(displayPrice)}
+              {formatINR(total)}
             </div>
             <p className="text-xs text-[color:var(--muted-foreground)] mt-1">
               Inclusive of GST · Includes making charges
@@ -109,11 +99,11 @@ function ProductPage() {
 
           <div style={{ backgroundColor: "var(--panel)" }} className="rounded-2xl p-5 mt-6">
             <p className="label-caps text-[color:var(--gold-dark)] text-[10px] mb-3">Live Price Breakdown</p>
-            <BreakdownRow l={`Metal value (${weightVal}g @ ${p.purity})`} v={bd.metalValue} />
-            <BreakdownRow l={`Making charges (${bd.makingPct}%)`} v={bd.making} />
-            <BreakdownRow l={`GST (${bd.gstPct}%)`} v={bd.gst} />
+            <BreakdownRow l={`Metal value (${weightVal}g @ ${p.purity})`} v={metalValue} />
+            <BreakdownRow l="Making charges" v={making} />
+            <BreakdownRow l="GST (3%)" v={gst} />
             <div className="h-px bg-[color:var(--gold)]/30 my-3" />
-            <BreakdownRow l="Total" v={bd.total} bold />
+            <BreakdownRow l="Total" v={total} bold />
           </div>
 
           <div className="flex items-center gap-3 mt-6 flex-wrap">
@@ -140,7 +130,6 @@ function ProductPage() {
             </button>
           </div>
 
-          {/* Description Section */}
           <div className="mt-8 pt-6 border-t border-[color:var(--border)]">
             <p className="text-sm text-[color:var(--muted-foreground)] leading-relaxed whitespace-pre-line">
               {rawDesc.length > 0
