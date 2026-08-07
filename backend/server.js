@@ -16,47 +16,41 @@ const addressRoutes = require("./routes/addressRoutes");
 const { protect } = require("./middleware/authMiddleware");
 
 const orderRoutes = require("./routes/orderRoutes");
+
+
 const wishlistRoutes = require("./routes/wishlistRoutes");
 const cartRoutes = require("./routes/cartRoutes");
 const reelRoutes = require("./routes/reelRoutes");
 const shiprocketRoutes = require("./routes/shiprocket");
 
+
+
+
 const app = express();
 
 const allowedOrigins = [
-  "https://nvsjewellery.com",
-  "https://www.nvsjewellery.com",
-  "http://localhost:8080",
-  "http://localhost:5173",
+"*"
 ];
 
-// 1. Updated Helmet configuration to allow cross-origin resource access
+app.use(helmet());
+
 app.use(
-  helmet({
-    crossOriginResourcePolicy: { policy: "cross-origin" },
+  cors({
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      if (process.env.CLIENT_URL && origin === process.env.CLIENT_URL) {
+        return callback(null, true);
+      }
+      if (origin.endsWith(".vercel.app")) return callback(null, true);
+      return callback(new Error("Not allowed by CORS"));
+    },
+    credentials: true,
+    // ADDED "PATCH" TO ALLOWED METHODS
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
   })
 );
-
-// 2. CORS configuration
-const corsOptions = {
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    if (process.env.CLIENT_URL && origin === process.env.CLIENT_URL) {
-      return callback(null, true);
-    }
-    if (origin.endsWith(".vercel.app")) return callback(null, true);
-    return callback(new Error("Not allowed by CORS"));
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-};
-
-app.use(cors(corsOptions));
-
-// 3. Enable preflight checks across all routes
-app.options("*", cors(corsOptions));
 
 app.use(express.json({ limit: "10kb" }));
 app.use(cookieParser());
@@ -75,7 +69,7 @@ app.use("/api/addresses", protect, addressRoutes);
 app.use("/api/wishlist", protect, wishlistRoutes);
 app.use("/api/cart", protect, cartRoutes);
 app.use("/api/reels", reelRoutes);
-app.use("/api/shiprocket", protect, shiprocketRoutes);
+app.use("/api/shiprocket",protect, shiprocketRoutes);
 app.use("/api/orders", protect, orderRoutes);
 
 app.use(notFound);
