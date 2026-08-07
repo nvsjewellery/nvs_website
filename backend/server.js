@@ -16,41 +16,57 @@ const addressRoutes = require("./routes/addressRoutes");
 const { protect } = require("./middleware/authMiddleware");
 
 const orderRoutes = require("./routes/orderRoutes");
-
-
 const wishlistRoutes = require("./routes/wishlistRoutes");
 const cartRoutes = require("./routes/cartRoutes");
 const reelRoutes = require("./routes/reelRoutes");
 const shiprocketRoutes = require("./routes/shiprocket");
 
-
-
-
 const app = express();
 
+// Explicitly list all allowed origins
 const allowedOrigins = [
-"*"
+  "https://nvsjewellery.com",
+  "https://www.nvsjewellery.com",
+  "http://localhost:8080",
+  "http://localhost:5173",
 ];
 
-app.use(helmet());
-
+// FIX 1: Configure Helmet to allow cross-origin resource access
 app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) return callback(null, true);
-      if (process.env.CLIENT_URL && origin === process.env.CLIENT_URL) {
-        return callback(null, true);
-      }
-      if (origin.endsWith(".vercel.app")) return callback(null, true);
-      return callback(new Error("Not allowed by CORS"));
-    },
-    credentials: true,
-    // ADDED "PATCH" TO ALLOWED METHODS
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
   })
 );
+
+// FIX 2: Proper CORS logic
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow non-browser requests (Postman, server-to-server)
+    if (!origin) return callback(null, true);
+
+    // Check allowed origins list
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+
+    // Check environment variable if set
+    if (process.env.CLIENT_URL && origin === process.env.CLIENT_URL) {
+      return callback(null, true);
+    }
+
+    // Allow Vercel preview deployments
+    if (origin.endsWith(".vercel.app")) return callback(null, true);
+
+    // Block disallowed origins without crashing preflight logic
+    return callback(null, false);
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+};
+
+app.use(cors(corsOptions));
+
+// FIX 3: Explicitly handle HTTP OPTIONS preflight requests for all endpoints
+app.options("*", cors(corsOptions));
 
 app.use(express.json({ limit: "10kb" }));
 app.use(cookieParser());
@@ -69,7 +85,7 @@ app.use("/api/addresses", protect, addressRoutes);
 app.use("/api/wishlist", protect, wishlistRoutes);
 app.use("/api/cart", protect, cartRoutes);
 app.use("/api/reels", reelRoutes);
-app.use("/api/shiprocket",protect, shiprocketRoutes);
+app.use("/api/shiprocket", protect, shiprocketRoutes);
 app.use("/api/orders", protect, orderRoutes);
 
 app.use(notFound);
