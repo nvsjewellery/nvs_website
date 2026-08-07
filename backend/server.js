@@ -14,7 +14,6 @@ const categoryRoutes = require("./routes/categoryRoutes");
 const ratesRoutes = require("./routes/ratesRoutes");
 const addressRoutes = require("./routes/addressRoutes");
 const { protect } = require("./middleware/authMiddleware");
-
 const orderRoutes = require("./routes/orderRoutes");
 const wishlistRoutes = require("./routes/wishlistRoutes");
 const cartRoutes = require("./routes/cartRoutes");
@@ -23,7 +22,6 @@ const shiprocketRoutes = require("./routes/shiprocket");
 
 const app = express();
 
-// Explicitly list all allowed origins
 const allowedOrigins = [
   "https://nvsjewellery.com",
   "https://www.nvsjewellery.com",
@@ -31,49 +29,54 @@ const allowedOrigins = [
   "http://localhost:5173",
 ];
 
-// FIX 1: Configure Helmet to allow cross-origin resource access
+// 1. MUST BE FIRST: Explicit manual preflight handler for Vercel Serverless
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+
+  // Check if origin is allowed or if it's a Vercel deployment preview
+  const isAllowed =
+    !origin ||
+    allowedOrigins.includes(origin) ||
+    (process.env.CLIENT_URL && origin === process.env.CLIENT_URL) ||
+    origin.endsWith(".vercel.app");
+
+  if (isAllowed && origin) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
+
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+  );
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, X-Requested-With, Accept"
+  );
+
+  // Handle OPTIONS preflight immediately
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
+
+  next();
+});
+
+// 2. Helmet configured safely
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" },
   })
 );
 
-// FIX 2: Proper CORS logic
-const corsOptions = {
-  origin: (origin, callback) => {
-    // Allow non-browser requests (Postman, server-to-server)
-    if (!origin) return callback(null, true);
-
-    // Check allowed origins list
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-
-    // Check environment variable if set
-    if (process.env.CLIENT_URL && origin === process.env.CLIENT_URL) {
-      return callback(null, true);
-    }
-
-    // Allow Vercel preview deployments
-    if (origin.endsWith(".vercel.app")) return callback(null, true);
-
-    // Block disallowed origins without crashing preflight logic
-    return callback(null, false);
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-};
-
-app.use(cors(corsOptions));
-
-// FIX 3: Explicitly handle HTTP OPTIONS preflight requests for all endpoints
-app.options("*", cors(corsOptions));
-
 app.use(express.json({ limit: "10kb" }));
 app.use(cookieParser());
 if (process.env.NODE_ENV !== "production") app.use(morgan("dev"));
 
 // Root Health Check Route
-app.get("/", (req, res) => res.json({ status: "ok", message: "NVS Backend API Active" }));
+app.get("/", (req, res) =>
+  res.json({ status: "ok", message: "NVS Backend API Active" })
+);
 app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 
 // API Routes
@@ -91,7 +94,7 @@ app.use("/api/orders", protect, orderRoutes);
 app.use(notFound);
 app.use(errorHandler);
 
-// Only listen locally (not on Vercel)
+// Local DB connection
 if (process.env.VERCEL !== "1") {
   const PORT = process.env.PORT || 5000;
   prisma
