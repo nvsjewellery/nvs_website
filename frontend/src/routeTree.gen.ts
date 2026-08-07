@@ -12,16 +12,16 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as WishlistRouteImport } from './routes/wishlist'
 import { Route as SilverRouteImport } from './routes/silver'
 import { Route as SigninRouteImport } from './routes/signin'
-import { Route as PlatinumRouteImport } from './routes/platinum'
+import { Route as OrdersRouteImport } from './routes/orders'
 import { Route as LiveratesRouteImport } from './routes/liverates'
 import { Route as GoldRouteImport } from './routes/gold'
-import { Route as DiamondRouteImport } from './routes/diamond'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as CheckoutRouteImport } from './routes/checkout'
 import { Route as CartRouteImport } from './routes/cart'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ProductIdRouteImport } from './routes/product.$id'
+import { Route as OrdersOrderIdRouteImport } from './routes/orders.$orderId'
 
 const WishlistRoute = WishlistRouteImport.update({
   id: '/wishlist',
@@ -38,9 +38,9 @@ const SigninRoute = SigninRouteImport.update({
   path: '/signin',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PlatinumRoute = PlatinumRouteImport.update({
-  id: '/platinum',
-  path: '/platinum',
+const OrdersRoute = OrdersRouteImport.update({
+  id: '/orders',
+  path: '/orders',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LiveratesRoute = LiveratesRouteImport.update({
@@ -51,11 +51,6 @@ const LiveratesRoute = LiveratesRouteImport.update({
 const GoldRoute = GoldRouteImport.update({
   id: '/gold',
   path: '/gold',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DiamondRoute = DiamondRouteImport.update({
-  id: '/diamond',
-  path: '/diamond',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ContactRoute = ContactRouteImport.update({
@@ -88,6 +83,11 @@ const ProductIdRoute = ProductIdRouteImport.update({
   path: '/product/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OrdersOrderIdRoute = OrdersOrderIdRouteImport.update({
+  id: '/$orderId',
+  path: '/$orderId',
+  getParentRoute: () => OrdersRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -95,13 +95,13 @@ export interface FileRoutesByFullPath {
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
   '/contact': typeof ContactRoute
-  '/diamond': typeof DiamondRoute
   '/gold': typeof GoldRoute
   '/liverates': typeof LiveratesRoute
-  '/platinum': typeof PlatinumRoute
+  '/orders': typeof OrdersRouteWithChildren
   '/signin': typeof SigninRoute
   '/silver': typeof SilverRoute
   '/wishlist': typeof WishlistRoute
+  '/orders/$orderId': typeof OrdersOrderIdRoute
   '/product/$id': typeof ProductIdRoute
 }
 export interface FileRoutesByTo {
@@ -110,13 +110,13 @@ export interface FileRoutesByTo {
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
   '/contact': typeof ContactRoute
-  '/diamond': typeof DiamondRoute
   '/gold': typeof GoldRoute
   '/liverates': typeof LiveratesRoute
-  '/platinum': typeof PlatinumRoute
+  '/orders': typeof OrdersRouteWithChildren
   '/signin': typeof SigninRoute
   '/silver': typeof SilverRoute
   '/wishlist': typeof WishlistRoute
+  '/orders/$orderId': typeof OrdersOrderIdRoute
   '/product/$id': typeof ProductIdRoute
 }
 export interface FileRoutesById {
@@ -126,13 +126,13 @@ export interface FileRoutesById {
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
   '/contact': typeof ContactRoute
-  '/diamond': typeof DiamondRoute
   '/gold': typeof GoldRoute
   '/liverates': typeof LiveratesRoute
-  '/platinum': typeof PlatinumRoute
+  '/orders': typeof OrdersRouteWithChildren
   '/signin': typeof SigninRoute
   '/silver': typeof SilverRoute
   '/wishlist': typeof WishlistRoute
+  '/orders/$orderId': typeof OrdersOrderIdRoute
   '/product/$id': typeof ProductIdRoute
 }
 export interface FileRouteTypes {
@@ -143,13 +143,13 @@ export interface FileRouteTypes {
     | '/cart'
     | '/checkout'
     | '/contact'
-    | '/diamond'
     | '/gold'
     | '/liverates'
-    | '/platinum'
+    | '/orders'
     | '/signin'
     | '/silver'
     | '/wishlist'
+    | '/orders/$orderId'
     | '/product/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -158,13 +158,13 @@ export interface FileRouteTypes {
     | '/cart'
     | '/checkout'
     | '/contact'
-    | '/diamond'
     | '/gold'
     | '/liverates'
-    | '/platinum'
+    | '/orders'
     | '/signin'
     | '/silver'
     | '/wishlist'
+    | '/orders/$orderId'
     | '/product/$id'
   id:
     | '__root__'
@@ -173,13 +173,13 @@ export interface FileRouteTypes {
     | '/cart'
     | '/checkout'
     | '/contact'
-    | '/diamond'
     | '/gold'
     | '/liverates'
-    | '/platinum'
+    | '/orders'
     | '/signin'
     | '/silver'
     | '/wishlist'
+    | '/orders/$orderId'
     | '/product/$id'
   fileRoutesById: FileRoutesById
 }
@@ -189,10 +189,9 @@ export interface RootRouteChildren {
   CartRoute: typeof CartRoute
   CheckoutRoute: typeof CheckoutRoute
   ContactRoute: typeof ContactRoute
-  DiamondRoute: typeof DiamondRoute
   GoldRoute: typeof GoldRoute
   LiveratesRoute: typeof LiveratesRoute
-  PlatinumRoute: typeof PlatinumRoute
+  OrdersRoute: typeof OrdersRouteWithChildren
   SigninRoute: typeof SigninRoute
   SilverRoute: typeof SilverRoute
   WishlistRoute: typeof WishlistRoute
@@ -222,11 +221,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SigninRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/platinum': {
-      id: '/platinum'
-      path: '/platinum'
-      fullPath: '/platinum'
-      preLoaderRoute: typeof PlatinumRouteImport
+    '/orders': {
+      id: '/orders'
+      path: '/orders'
+      fullPath: '/orders'
+      preLoaderRoute: typeof OrdersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/liverates': {
@@ -241,13 +240,6 @@ declare module '@tanstack/react-router' {
       path: '/gold'
       fullPath: '/gold'
       preLoaderRoute: typeof GoldRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/diamond': {
-      id: '/diamond'
-      path: '/diamond'
-      fullPath: '/diamond'
-      preLoaderRoute: typeof DiamondRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/contact': {
@@ -292,8 +284,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProductIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/orders/$orderId': {
+      id: '/orders/$orderId'
+      path: '/$orderId'
+      fullPath: '/orders/$orderId'
+      preLoaderRoute: typeof OrdersOrderIdRouteImport
+      parentRoute: typeof OrdersRoute
+    }
   }
 }
+
+interface OrdersRouteChildren {
+  OrdersOrderIdRoute: typeof OrdersOrderIdRoute
+}
+
+const OrdersRouteChildren: OrdersRouteChildren = {
+  OrdersOrderIdRoute: OrdersOrderIdRoute,
+}
+
+const OrdersRouteWithChildren =
+  OrdersRoute._addFileChildren(OrdersRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -301,10 +311,9 @@ const rootRouteChildren: RootRouteChildren = {
   CartRoute: CartRoute,
   CheckoutRoute: CheckoutRoute,
   ContactRoute: ContactRoute,
-  DiamondRoute: DiamondRoute,
   GoldRoute: GoldRoute,
   LiveratesRoute: LiveratesRoute,
-  PlatinumRoute: PlatinumRoute,
+  OrdersRoute: OrdersRouteWithChildren,
   SigninRoute: SigninRoute,
   SilverRoute: SilverRoute,
   WishlistRoute: WishlistRoute,

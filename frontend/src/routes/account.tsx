@@ -80,72 +80,72 @@ export function Account() {
   }, [wishlistKeys]);
 
   useEffect(() => {
-  if (!user) return;
+    if (!user) return;
 
-  async function loadAddresses() {
-    try {
-      const data = await addressesApi.getAll();
-      setAddresses(data);
-    } catch (err) {
-      console.error(err);
+    async function loadAddresses() {
+      try {
+        const data = await addressesApi.getAll();
+        setAddresses(data);
+      } catch (err) {
+        console.error(err);
+      }
     }
-  }
 
-  loadAddresses();
-}, [user]);
+    loadAddresses();
+  }, [user]);
 
   const handleAddAddress = async (
-  e: React.FormEvent
-) => {
-  e.preventDefault();
+    e: React.FormEvent
+  ) => {
+    e.preventDefault();
 
-  if (
-    !addressLine ||
-    !city ||
-    !pincode
-  )
-    return;
+    if (
+      !addressLine ||
+      !city ||
+      !pincode
+    )
+      return;
 
-  try {
-    const address =
-      await addressesApi.create({
-        label,
-        addressLine,
-        city,
-        pincode,
-      });
+    try {
+      const address =
+        await addressesApi.create({
+          label,
+          addressLine,
+          city,
+          pincode,
+        });
 
-    setAddresses((prev) => [
-      ...prev,
-      address,
-    ]);
+      setAddresses((prev) => [
+        ...prev,
+        address,
+      ]);
 
-    setLabel("Home");
-    setAddressLine("");
-    setCity("");
-    setPincode("");
+      setLabel("Home");
+      setAddressLine("");
+      setCity("");
+      setPincode("");
 
-    setShowAddForm(false);
-  } catch (err) {
-    console.error(err);
-    alert("Failed to save address");
-  }
-};
+      setShowAddForm(false);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to save address");
+    }
+  };
 
   const handleRemoveAddress = async (
-  id: string
-) => {
-  try {
-    await addressesApi.delete(id);
+    id: string
+  ) => {
+    try {
+      await addressesApi.delete(id);
 
-    setAddresses((prev) =>
-      prev.filter((a) => a.id !== id)
-    );
-  } catch (err) {
-    console.error(err);
-    alert("Failed to delete address");
-  }
-};
+      setAddresses((prev) =>
+        prev.filter((a) => a.id !== id)
+      );
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete address");
+    }
+  };
 
   // Wait for initial check before assuming user is signed out
   if (!user && !authChecked) {
@@ -182,54 +182,53 @@ export function Account() {
             <p className="text-[color:var(--gold-dark)] mt-2">{user.email}</p>
           </div>
           <AlertDialog>
-  <AlertDialogTrigger asChild>
-    <button className="pill-gold-outline">
-      Sign Out
-    </button>
-  </AlertDialogTrigger>
+            <AlertDialogTrigger asChild>
+              <button className="pill-gold-outline">
+                Sign Out
+              </button>
+            </AlertDialogTrigger>
 
-  <AlertDialogContent>
-    <AlertDialogHeader>
-      <AlertDialogTitle>
-        Sign out?
-      </AlertDialogTitle>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  Sign out?
+                </AlertDialogTitle>
 
-      <AlertDialogDescription>
-        Are you sure you want to sign out of your account?
-      </AlertDialogDescription>
-    </AlertDialogHeader>
+                <AlertDialogDescription>
+                  Are you sure you want to sign out of your account?
+                </AlertDialogDescription>
+              </AlertDialogHeader>
 
-    <AlertDialogFooter>
-      <AlertDialogCancel>
-        Cancel
-      </AlertDialogCancel>
+              <AlertDialogFooter>
+                <AlertDialogCancel>
+                  Cancel
+                </AlertDialogCancel>
 
-      <AlertDialogAction
-        onClick={() => {
-          actions.signOut();
-          nav({ to: "/" });
-        }}
-      >
-        Sign Out
-      </AlertDialogAction>
-    </AlertDialogFooter>
-  </AlertDialogContent>
-</AlertDialog>
+                <AlertDialogAction
+                  onClick={() => {
+                    actions.signOut();
+                    nav({ to: "/" });
+                  }}
+                >
+                  Sign Out
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
         <OrnamentalDivider />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {/* Orders Section */}
-          <Card icon={<Box className="w-4 h-4" />} title="My Orders">
-            <div className="bg-[color:var(--panel)] rounded-xl p-4 text-center">
-              <p className="text-sm font-medium text-[color:var(--espresso)]">
-                Order Tracking & History
-              </p>
-              <p className="text-xs text-[color:var(--muted-foreground)] mt-1">
-                Will be available soon after connecting Shiprocket integration.
-              </p>
-            </div>
-          </Card>
+          <Link
+            to="/orders"
+            className="block bg-cream/40 border border-border rounded-xl p-4 text-center hover:border-gold transition"
+          >
+            <p className="font-semibold text-espresso">Order Tracking & History</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              View all your orders and track shipments
+            </p>
+          </Link>
 
           {/* Wishlist Section */}
           <Card icon={<Heart className="w-4 h-4" />} title="Wishlist">
@@ -304,11 +303,10 @@ export function Account() {
                       type="button"
                       key={lbl}
                       onClick={() => setLabel(lbl)}
-                      className={`px-3 py-1 text-xs rounded-full border transition-colors ${
-                        label === lbl
+                      className={`px-3 py-1 text-xs rounded-full border transition-colors ${label === lbl
                           ? "bg-[color:var(--gold)] text-white border-[color:var(--gold)]"
                           : "border-[color:var(--border)] text-[color:var(--espresso)]"
-                      }`}
+                        }`}
                     >
                       {lbl}
                     </button>

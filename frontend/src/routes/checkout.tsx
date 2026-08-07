@@ -12,6 +12,7 @@ type Address = {
   label: string;
   addressLine: string;
   city: string;
+  state: string;
   pincode: string;
 };
 
@@ -32,7 +33,6 @@ export function Checkout() {
   // Contact State (Pre-filled with user.phone if available)
   const [phone, setPhone] = useState(user?.phone || "");
 
-  // Update local phone state if user object loads asynchronously
   useEffect(() => {
     if (user?.phone && !phone) {
       setPhone(user.phone);
@@ -53,6 +53,7 @@ export function Checkout() {
   const [label, setLabel] = useState("Home");
   const [addressLine, setAddressLine] = useState("");
   const [city, setCity] = useState("");
+  const [state, setState] = useState("");
   const [pincode, setPincode] = useState("");
 
   const [loading, setLoading] = useState(false);
@@ -147,13 +148,14 @@ export function Checkout() {
   // Handle Inline Add New Address
   const handleAddNewAddress = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!addressLine || !city || !pincode) return;
+    if (!addressLine || !city || !state || !pincode) return;
 
     try {
       const newAddress = await addressesApi.create({
         label,
         addressLine,
         city,
+        state,
         pincode,
       });
 
@@ -163,6 +165,7 @@ export function Checkout() {
       setLabel("Home");
       setAddressLine("");
       setCity("");
+      setState("");
       setPincode("");
       setShowAddForm(false);
     } catch (err) {
@@ -187,7 +190,6 @@ export function Checkout() {
     return s + itemPrice * i.qty;
   }, 0);
 
-  // Trigger Razorpay Demo Gateway & Persist User Phone Number
   async function handlePlaceOrder(e: React.FormEvent) {
     e.preventDefault();
 
@@ -195,77 +197,75 @@ export function Checkout() {
       alert("Please enter your mobile phone number.");
       return;
     }
-
-    if (!selectedAddressId && !showAddForm) {
+    if (!selectedAddressId) {
       alert("Please select a shipping address.");
       return;
     }
 
     setLoading(true);
 
-    // 1. Save phone number using the centralized API helper
-    if (user) {
-      try {
-        await api.updateProfile({ phone });
-
-        // Refresh store with updated user details
-        if (actions.checkAuth) {
-          await actions.checkAuth();
-        }
-      } catch (err: any) {
-        console.error("Failed to save phone number to profile:", err);
-        alert(`Failed to save phone number: ${err.message || "Unauthorized"}`);
-        setLoading(false);
-        return; // Stop execution if DB update fails
+    try {
+      // Save phone number to profile first
+      await api.updateProfile({ phone });
+      if (actions.checkAuth) {
+        await actions.checkAuth();
       }
-    }
 
-    // 2. Open Razorpay Gateway
-    const razorpayKey = "rzp_test_TIZNsDeMd9h0Dx";
-    const selectedAddr = addresses.find((a) => a.id === selectedAddressId);
+      // Step 1 — ask backend to create a Razorpay order (amount computed server-side)
+      const { razorpayOrder } = await api.post("/orders/initiate-payment", {});
 
-    const options = {
-      key: razorpayKey,
-      amount: total * 100,
-      currency: "INR",
-      name: "NVS Jewellery",
-      description: "Jewellery Purchase Checkout",
-      image: "/favicon.ico",
-      handler: function (response: any) {
-        alert(`Payment Successful! Payment ID: ${response.razorpay_payment_id}`);
-        actions.clearCart();
-        nav({ to: "/account" });
-      },
-      prefill: {
-        name: user?.name || "Customer",
-        email: user?.email || "customer@nvsjewellery.com",
-        contact: phone,
-      },
-      notes: {
-        shipping_address: selectedAddr
-          ? `${selectedAddr.addressLine}, ${selectedAddr.city} - ${selectedAddr.pincode}`
-          : "N/A",
-      },
-      theme: {
-        color: "#B8860B",
-      },
-      modal: {
-        ondismiss: function () {
-          setLoading(false);
+      const options = {
+        key: "rzp_test_TIZNsDeMd9h0Dx",
+        amount: razorpayOrder.amount,
+        currency: "INR",
+        order_id: razorpayOrder.id, // backend-generated order id, never client-side
+        name: "NVS Jewellery",
+        description: "Jewellery Purchase Checkout",
+        image: "/favicon.ico",
+        handler: async function (response: any) {
+          try {
+            // Step 2 — verify signature + place order on backend
+            await api.post("/orders/verify-and-place", {
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              addressId: selectedAddressId,
+              phone,
+            });
+            actions.clearCart();
+            nav({ to: "/account" });
+          } catch (err: any) {
+            alert(err.message || "Payment verification failed. Please contact support.");
+          } finally {
+            setLoading(false);
+          }
         },
-      },
-    };
+        prefill: {
+          name: user?.name || "Customer",
+          email: user?.email || "customer@nvsjewellery.com",
+          contact: phone,
+        },
+        theme: {
+          color: "#B8860B",
+        },
+        modal: {
+          ondismiss: function () {
+            setLoading(false);
+          },
+        },
+      };
 
-    if (window.Razorpay) {
-      const rzp = new window.Razorpay(options);
-      rzp.open();
-    } else {
-      alert("Redirecting to Razorpay Test Gateway...");
-      setTimeout(() => {
-        actions.clearCart();
-        alert("Demo Payment Completed Successfully!");
-        nav({ to: "/account" });
-      }, 1000);
+      if (window.Razorpay) {
+        const rzp = new window.Razorpay(options);
+        rzp.open();
+      } else {
+        alert("Payment gateway failed to load. Please refresh and try again.");
+        setLoading(false);
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || "Something went wrong. Please try again.");
+      setLoading(false);
     }
   }
 
@@ -405,11 +405,10 @@ export function Checkout() {
                           type="button"
                           key={lbl}
                           onClick={() => setLabel(lbl)}
-                          className={`px-3 py-1 text-xs rounded-full border transition-colors ${
-                            label === lbl
+                          className={`px-3 py-1 text-xs rounded-full border transition-colors ${label === lbl
                               ? "bg-gold text-white border-gold"
                               : "border-border text-espresso"
-                          }`}
+                            }`}
                         >
                           {lbl}
                         </button>
@@ -422,12 +421,19 @@ export function Checkout() {
                       onChange={(e) => setAddressLine(e.target.value)}
                       className="w-full text-xs p-2.5 rounded-lg border border-border bg-white"
                     />
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-3 gap-2">
                       <input
                         type="text"
                         placeholder="City"
                         value={city}
                         onChange={(e) => setCity(e.target.value)}
+                        className="w-full text-xs p-2.5 rounded-lg border border-border bg-white"
+                      />
+                      <input
+                        type="text"
+                        placeholder="State"
+                        value={state}
+                        onChange={(e) => setState(e.target.value)}
                         className="w-full text-xs p-2.5 rounded-lg border border-border bg-white"
                       />
                       <input
@@ -461,11 +467,10 @@ export function Checkout() {
                       <div
                         key={a.id}
                         onClick={() => setSelectedAddressId(a.id)}
-                        className={`cursor-pointer p-4 rounded-xl border text-sm transition relative ${
-                          selectedAddressId === a.id
+                        className={`cursor-pointer p-4 rounded-xl border text-sm transition relative ${selectedAddressId === a.id
                             ? "border-gold bg-cream/40 text-espresso font-medium shadow-xs"
                             : "border-border hover:border-gold text-espresso"
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center justify-between mb-1">
                           <span className="font-bold text-[10px] label-caps text-gold-dark">
@@ -481,7 +486,7 @@ export function Checkout() {
                           {a.addressLine}
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {a.city} — {a.pincode}
+                          {a.city}, {a.state} — {a.pincode}
                         </p>
                       </div>
                     ))}
@@ -539,7 +544,7 @@ export function Checkout() {
                 disabled={loading}
                 className="pill-gold w-full justify-center mt-5 flex py-3 text-sm font-semibold tracking-wider uppercase transition disabled:opacity-50"
               >
-                {loading ? "Opening Razorpay..." : "Place Order"}
+                {loading ? "Opening Razorpay..." : "Pay & Place Order"}
               </button>
             </div>
           </form>

@@ -15,9 +15,16 @@ const ratesRoutes = require("./routes/ratesRoutes");
 const addressRoutes = require("./routes/addressRoutes");
 const { protect } = require("./middleware/authMiddleware");
 
+const orderRoutes = require("./routes/orderRoutes");
+
+
 const wishlistRoutes = require("./routes/wishlistRoutes");
 const cartRoutes = require("./routes/cartRoutes");
 const reelRoutes = require("./routes/reelRoutes");
+const shiprocketRoutes = require("./routes/shiprocket");
+
+
+
 
 const app = express();
 
@@ -65,6 +72,8 @@ app.use("/api/addresses", protect, addressRoutes);
 app.use("/api/wishlist", protect, wishlistRoutes);
 app.use("/api/cart", protect, cartRoutes);
 app.use("/api/reels", reelRoutes);
+app.use("/api/shiprocket",protect, shiprocketRoutes);
+app.use("/api/orders", protect, orderRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

@@ -13,7 +13,7 @@ model User {
   email     String    @unique
   password  String
   phone     String?
-
+  orders    Order[]   // add this line
   addresses Address[]
   wishlist  Wishlist[]
   cart      Cart[]
@@ -32,6 +32,8 @@ model Address {
   label       String   @default("Home")
   addressLine String
   city        String
+  state       String   @default("Andhra Pradesh")  // add this
+
   pincode     String
   isDefault   Boolean  @default(false)
 
@@ -94,8 +96,9 @@ model Product {
   stock            Int           @default(0)
   sold             Int           @default(0)
 
-  wishlist Wishlist[]
-  cart      Cart[]
+  wishlist   Wishlist[]
+  cart       Cart[]
+  orderItems OrderItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -165,4 +168,80 @@ enum DiscountScope {
 enum DiscountKind {
   percent
   flat
+}
+
+model Order {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+
+  items     OrderItem[]
+
+  // Customer/shipping details snapshotted at order time
+  customerName    String
+  customerLastName String @default("NA")
+  customerEmail   String
+  customerPhone   String
+  address         String
+  city            String
+  state           String
+  pincode         String
+  razorpayOrderId   String?
+  razorpayPaymentId String?
+  subTotal      Float
+  total         Float
+  paymentMethod PaymentMethod @default(Prepaid)
+  paymentStatus PaymentStatus @default(Pending)
+
+  status        OrderStatus @default(Placed)
+
+  // Shiprocket fields
+  srOrderId     String?
+  srShipmentId  String?
+  srAwbCode     String?
+  srCourierName String?
+  labelUrl      String?
+  invoiceUrl    String?
+  manifestUrl   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  name          String
+  sku           String
+  qty           Int
+  sellingPrice  Float
+
+  @@map("order_items")
+}
+
+enum PaymentMethod {
+  Prepaid
+  COD
+}
+
+enum PaymentStatus {
+  Pending
+  Paid
+  Failed
+  Refunded
+}
+
+enum OrderStatus {
+  Placed
+  Confirmed
+  Shipped
+  Delivered
+  Cancelled
 }

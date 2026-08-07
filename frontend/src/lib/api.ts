@@ -27,6 +27,10 @@ interface ApiResponse<T> {
 
   wishlist?: T;
   cart?: T;
+
+  // order-related response shapes
+  razorpayOrder?: T;
+  order?: T;
 }
 
 interface User {
@@ -69,6 +73,7 @@ export interface AddressItem {
   label: string;
   addressLine: string;
   city: string;
+  state: string;
   pincode: string;
   isDefault?: boolean;
 }
@@ -112,6 +117,13 @@ async function request<T>(
 }
 
 export const api = {
+  async post<T>(endpoint: string, body: any = {}): Promise<ApiResponse<T>> {
+    return request<T>(endpoint, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
   async register(name: string, email: string, password: string) {
     const res = await request<User>("/auth/register", {
       method: "POST",
@@ -186,6 +198,7 @@ export const addressesApi = {
     label: string;
     addressLine: string;
     city: string;
+    state: string;
     pincode: string;
     isDefault?: boolean;
   }): Promise<AddressItem> {
@@ -368,3 +381,47 @@ export function clearApiCache() {
   cache.products.clear();
   cache.categories.clear();
 }
+
+export interface OrderItemDetail {
+  id: string;
+  name: string;
+  sku: string;
+  qty: number;
+  sellingPrice: number;
+}
+
+export interface OrderSummary {
+  id: string;
+  status: string;
+  total: number;
+  createdAt: string;
+  items: OrderItemDetail[];
+}
+
+export interface OrderDetail extends OrderSummary {
+  customerName: string;
+  customerLastName: string;
+  customerPhone: string;
+  address: string;
+  city: string;
+  state: string;
+  pincode: string;
+  srAwbCode?: string | null;
+  srCourierName?: string | null;
+}
+
+export const ordersApi = {
+  async getAll(): Promise<OrderSummary[]> {
+    const res = await request<OrderSummary[]>("/orders", {
+      method: "GET",
+    });
+    return (res as any).orders ?? [];
+  },
+
+  async getById(orderId: string): Promise<{ order: OrderDetail; tracking: any }> {
+    const res = await request<any>(`/orders/${orderId}`, {
+      method: "GET",
+    });
+    return { order: (res as any).order, tracking: (res as any).tracking };
+  },
+};

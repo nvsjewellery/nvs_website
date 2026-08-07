@@ -52,14 +52,15 @@ router.post("/", async (req, res) => {
       label,
       addressLine,
       city,
+      state,
       pincode,
       isDefault = false,
     } = req.body;
 
-    if (!addressLine || !city || !pincode) {
+    if (!addressLine || !city || !state || !pincode) {
       return res.status(400).json({
         success: false,
-        message: "Address, City and Pincode are required.",
+        message: "Address, City, State and Pincode are required.",
       });
     }
 
@@ -81,6 +82,7 @@ router.post("/", async (req, res) => {
         label: label || "Home",
         addressLine,
         city,
+        state,
         pincode,
         isDefault,
       },
@@ -99,7 +101,6 @@ router.post("/", async (req, res) => {
     });
   }
 });
-
 /*
 |--------------------------------------------------------------------------
 | DELETE /api/addresses/:id

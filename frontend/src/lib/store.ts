@@ -218,7 +218,7 @@ export let LIVE_RATES: Record<string, number> = {
   "14K": 8454,
   "9K": 5435,
   PT950: 3450,
-  "92.5": 222,
+  "92.5": 222,        
 };
 
 export function setLiveRates(newRates: Record<string, number>) {
