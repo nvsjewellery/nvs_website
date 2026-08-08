@@ -3,9 +3,17 @@ import { useEffect, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { OrnamentalDivider } from "@/components/OrnamentalDivider";
 import { api, addressesApi, productsApi } from "@/lib/api";
-import { actions, computeBreakdown, formatINR, useStore, type Product } from "@/lib/store";
+import {
+  actions,
+  computeBreakdown,
+  formatINR,
+  useStore,
+  type Product,
+} from "@/lib/store";
 
-export const Route = createFileRoute("/checkout")({ component: Checkout });
+export const Route = createFileRoute("/checkout")({
+  component: Checkout,
+});
 
 type Address = {
   id: string;
@@ -16,9 +24,45 @@ type Address = {
   pincode: string;
 };
 
+type RazorpayOrder = {
+  id: string;
+  amount: number;
+  currency: string;
+};
+
+type RazorpayResponse = {
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+};
+
+type RazorpayOptions = {
+  key: string;
+  amount: number;
+  currency: string;
+  order_id: string;
+  name: string;
+  description: string;
+  image?: string;
+  handler: (response: RazorpayResponse) => Promise<void>;
+  prefill?: {
+    name?: string;
+    email?: string;
+    contact?: string;
+  };
+  theme?: {
+    color?: string;
+  };
+  modal?: {
+    ondismiss?: () => void;
+  };
+};
+
 declare global {
   interface Window {
-    Razorpay: any;
+    Razorpay: new (options: RazorpayOptions) => {
+      open: () => void;
+    };
   }
 }
 
@@ -30,22 +74,24 @@ export function Checkout() {
   const cart = useStore((s) => s.cart);
   const nav = useNavigate();
 
-  // Contact State (Pre-filled with user.phone if available)
+  // Contact State
   const [phone, setPhone] = useState(user?.phone || "");
 
   useEffect(() => {
     if (user?.phone && !phone) {
       setPhone(user.phone);
     }
-  }, [user]);
+  }, [user, phone]);
 
   // Product Loading States
-  const [productsMap, setProductsMap] = useState<Record<string, Product>>(productCache);
+  const [productsMap, setProductsMap] =
+    useState<Record<string, Product>>(productCache);
+
   const [loadingProducts, setLoadingProducts] = useState(false);
 
   // Address States
   const [addresses, setAddresses] = useState<Address[]>([]);
-  const [selectedAddressId, setSelectedAddressId] = useState<string>("");
+  const [selectedAddressId, setSelectedAddressId] = useState("");
   const [loadingAddresses, setLoadingAddresses] = useState(false);
 
   // New Address Form States
@@ -60,14 +106,33 @@ export function Checkout() {
 
   // Load Razorpay SDK
   useEffect(() => {
+    if (document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]')) {
+      return;
+    }
+
     const script = document.createElement("script");
     script.src = "https://checkout.razorpay.com/v1/checkout.js";
     script.async = true;
+
+    script.onload = () => {
+      console.log("Razorpay SDK loaded");
+    };
+
+    script.onerror = () => {
+      console.error("Failed to load Razorpay SDK");
+    };
+
     document.body.appendChild(script);
+
+    return () => {
+      // Do not remove the script here because checkout navigation
+      // can happen multiple times during the session.
+    };
   }, []);
 
-  // Fetch full details for all products in cart from backend API
+  // Fetch full details for all products in cart
   const cartKeys = cart.map((c: any) => c.productId).join(",");
+
   useEffect(() => {
     let isMounted = true;
 
@@ -82,10 +147,12 @@ export function Checkout() {
       }
 
       setLoadingProducts(true);
+
       try {
         const promises = missingIds.map((id: string) =>
           productsApi.getById(id).catch(() => null)
         );
+
         const results = await Promise.all(promises);
 
         results.forEach((p: any) => {
@@ -103,7 +170,9 @@ export function Checkout() {
       } catch (err) {
         console.error("Failed to load checkout products:", err);
       } finally {
-        if (isMounted) setLoadingProducts(false);
+        if (isMounted) {
+          setLoadingProducts(false);
+        }
       }
     }
 
@@ -114,17 +183,21 @@ export function Checkout() {
     };
   }, [cartKeys]);
 
-  // Fetch Saved Addresses from Backend API
+  // Fetch Saved Addresses
   useEffect(() => {
     if (!user) return;
+
     let isMounted = true;
 
     async function loadAddresses() {
       setLoadingAddresses(true);
+
       try {
         const data = await addressesApi.getAll();
+
         if (isMounted) {
           setAddresses(data);
+
           if (data.length > 0) {
             setSelectedAddressId(data[0].id);
           }
@@ -148,7 +221,10 @@ export function Checkout() {
   // Handle Inline Add New Address
   const handleAddNewAddress = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!addressLine || !city || !state || !pincode) return;
+
+    if (!addressLine || !city || !state || !pincode) {
+      return;
+    }
 
     try {
       const newAddress = await addressesApi.create({
@@ -174,7 +250,7 @@ export function Checkout() {
     }
   };
 
-  // Build Cart Items with details fetched from Backend API
+  // Build Cart Items
   const items = cart
     .map((c: any) => ({
       ...c,
@@ -187,6 +263,7 @@ export function Checkout() {
     const weightVal = Number(i.p.weight ?? i.p.grossWeight ?? 0);
     const bd = computeBreakdown(weightVal, i.p.purity || "22K");
     const itemPrice = bd?.total ? bd.total : Number(i.p.price || 0);
+
     return s + itemPrice * i.qty;
   }, 0);
 
@@ -197,6 +274,7 @@ export function Checkout() {
       alert("Please enter your mobile phone number.");
       return;
     }
+
     if (!selectedAddressId) {
       alert("Please select a shipping address.");
       return;
@@ -207,22 +285,40 @@ export function Checkout() {
     try {
       // Save phone number to profile first
       await api.updateProfile({ phone });
+
       if (actions.checkAuth) {
         await actions.checkAuth();
       }
 
-      // Step 1 — ask backend to create a Razorpay order (amount computed server-side)
-      const { razorpayOrder } = await api.post("/orders/initiate-payment", {});
+      // Step 1 — ask backend to create Razorpay order
+      const paymentResponse = (await api.post(
+        "/orders/initiate-payment",
+        {}
+      )) as {
+        razorpayOrder: RazorpayOrder;
+      };
 
-      const options = {
+      const { razorpayOrder } = paymentResponse;
+
+      // Make sure the SDK has loaded
+      if (!window.Razorpay) {
+        alert(
+          "Payment gateway is still loading. Please wait a moment and try again."
+        );
+        setLoading(false);
+        return;
+      }
+
+      const options: RazorpayOptions = {
         key: "rzp_test_TIZNsDeMd9h0Dx",
         amount: razorpayOrder.amount,
-        currency: "INR",
-        order_id: razorpayOrder.id, // backend-generated order id, never client-side
+        currency: razorpayOrder.currency,
+        order_id: razorpayOrder.id,
         name: "NVS Jewellery",
         description: "Jewellery Purchase Checkout",
         image: "/favicon.ico",
-        handler: async function (response: any) {
+
+        handler: async function (response: RazorpayResponse) {
           try {
             // Step 2 — verify signature + place order on backend
             await api.post("/orders/verify-and-place", {
@@ -232,22 +328,29 @@ export function Checkout() {
               addressId: selectedAddressId,
               phone,
             });
+
             actions.clearCart();
             nav({ to: "/account" });
           } catch (err: any) {
-            alert(err.message || "Payment verification failed. Please contact support.");
+            alert(
+              err?.message ||
+                "Payment verification failed. Please contact support."
+            );
           } finally {
             setLoading(false);
           }
         },
+
         prefill: {
           name: user?.name || "Customer",
           email: user?.email || "customer@nvsjewellery.com",
           contact: phone,
         },
+
         theme: {
           color: "#B8860B",
         },
+
         modal: {
           ondismiss: function () {
             setLoading(false);
@@ -255,16 +358,16 @@ export function Checkout() {
         },
       };
 
-      if (window.Razorpay) {
-        const rzp = new window.Razorpay(options);
-        rzp.open();
-      } else {
-        alert("Payment gateway failed to load. Please refresh and try again.");
-        setLoading(false);
-      }
+      const rzp = new window.Razorpay(options);
+      rzp.open();
     } catch (err: any) {
       console.error(err);
-      alert(err.message || "Something went wrong. Please try again.");
+
+      alert(
+        err?.message ||
+          "Something went wrong. Please try again."
+      );
+
       setLoading(false);
     }
   }
@@ -275,6 +378,7 @@ export function Checkout() {
         <h1 className="font-serif text-4xl md:text-5xl text-espresso">
           Checkout
         </h1>
+
         <OrnamentalDivider />
 
         {loadingProducts && items.length === 0 ? (
@@ -288,10 +392,15 @@ export function Checkout() {
             <h2 className="font-serif text-2xl text-espresso">
               Your cart is empty
             </h2>
+
             <p className="text-sm text-muted-foreground mt-2">
               Please select a product to proceed with checkout.
             </p>
-            <Link to="/gold" className="pill-gold inline-flex mt-6">
+
+            <Link
+              to="/gold"
+              className="pill-gold inline-flex mt-6"
+            >
               Browse Collection
             </Link>
           </div>
@@ -301,16 +410,27 @@ export function Checkout() {
             className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-8 mt-6"
           >
             <div className="space-y-6">
-              {/* Product Details Section */}
+
+              {/* Product Details */}
               <div className="bg-white border border-border rounded-2xl p-6 shadow-xs">
                 <h3 className="font-serif text-xl text-espresso mb-4">
                   Items to Purchase
                 </h3>
+
                 <div className="space-y-4 divide-y divide-border/60">
                   {items.map((i: any) => {
-                    const weightVal = Number(i.p.weight ?? i.p.grossWeight ?? 0);
-                    const bd = computeBreakdown(weightVal, i.p.purity || "22K");
-                    const itemPrice = bd?.total ? bd.total : Number(i.p.price || 0);
+                    const weightVal = Number(
+                      i.p.weight ?? i.p.grossWeight ?? 0
+                    );
+
+                    const bd = computeBreakdown(
+                      weightVal,
+                      i.p.purity || "22K"
+                    );
+
+                    const itemPrice = bd?.total
+                      ? bd.total
+                      : Number(i.p.price || 0);
 
                     return (
                       <div
@@ -325,10 +445,12 @@ export function Checkout() {
                               className="w-16 h-16 object-cover rounded-xl border border-border bg-panel shrink-0"
                             />
                           )}
+
                           <div className="min-w-0">
                             <h4 className="font-serif font-bold text-base text-espresso truncate">
                               {i.p.name}
                             </h4>
+
                             <p className="text-xs text-muted-foreground mt-0.5">
                               Weight:{" "}
                               <span className="font-semibold text-espresso">
@@ -339,11 +461,13 @@ export function Checkout() {
                                 {i.p.purity || "22K"}
                               </span>
                             </p>
+
                             <p className="text-xs text-gold-dark font-semibold mt-1">
                               Qty: {i.qty}
                             </p>
                           </div>
                         </div>
+
                         <div className="text-right shrink-0">
                           <p className="font-bold text-base text-espresso">
                             {formatINR(itemPrice * i.qty)}
@@ -355,18 +479,21 @@ export function Checkout() {
                 </div>
               </div>
 
-              {/* Step 1: Contact Number */}
+              {/* Contact Number */}
               <div className="bg-white border border-border rounded-2xl p-6 shadow-xs">
                 <h3 className="font-serif text-xl text-espresso mb-2">
                   1. Contact Number
                 </h3>
+
                 <p className="text-xs text-muted-foreground mb-4">
                   Enter your mobile phone number for order updates & tracking.
                 </p>
+
                 <label className="block">
                   <span className="text-xs label-caps text-gold-dark font-semibold">
                     Mobile Phone Number
                   </span>
+
                   <input
                     type="tel"
                     placeholder="+91 98765 43210"
@@ -378,18 +505,21 @@ export function Checkout() {
                 </label>
               </div>
 
-              {/* Step 2: Saved Shipping Addresses */}
+              {/* Shipping Address */}
               <div className="bg-white border border-border rounded-2xl p-6 shadow-xs">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-serif text-xl text-espresso">
                     2. Select Shipping Address
                   </h3>
+
                   <button
                     type="button"
                     onClick={() => setShowAddForm(!showAddForm)}
                     className="text-xs font-semibold text-gold-dark hover:underline"
                   >
-                    {showAddForm ? "Select From Saved" : "+ Add New Address"}
+                    {showAddForm
+                      ? "Select From Saved"
+                      : "+ Add New Address"}
                   </button>
                 </div>
 
@@ -399,21 +529,24 @@ export function Checkout() {
                   </p>
                 ) : showAddForm ? (
                   <div className="space-y-3 pt-2 border-t border-border">
+
                     <div className="flex gap-2">
                       {["Home", "Work", "Other"].map((lbl) => (
                         <button
                           type="button"
                           key={lbl}
                           onClick={() => setLabel(lbl)}
-                          className={`px-3 py-1 text-xs rounded-full border transition-colors ${label === lbl
+                          className={`px-3 py-1 text-xs rounded-full border transition-colors ${
+                            label === lbl
                               ? "bg-gold text-white border-gold"
                               : "border-border text-espresso"
-                            }`}
+                          }`}
                         >
                           {lbl}
                         </button>
                       ))}
                     </div>
+
                     <input
                       type="text"
                       placeholder="Street / House No. / Area"
@@ -421,6 +554,7 @@ export function Checkout() {
                       onChange={(e) => setAddressLine(e.target.value)}
                       className="w-full text-xs p-2.5 rounded-lg border border-border bg-white"
                     />
+
                     <div className="grid grid-cols-3 gap-2">
                       <input
                         type="text"
@@ -429,6 +563,7 @@ export function Checkout() {
                         onChange={(e) => setCity(e.target.value)}
                         className="w-full text-xs p-2.5 rounded-lg border border-border bg-white"
                       />
+
                       <input
                         type="text"
                         placeholder="State"
@@ -436,6 +571,7 @@ export function Checkout() {
                         onChange={(e) => setState(e.target.value)}
                         className="w-full text-xs p-2.5 rounded-lg border border-border bg-white"
                       />
+
                       <input
                         type="text"
                         placeholder="Pincode"
@@ -444,6 +580,7 @@ export function Checkout() {
                         className="w-full text-xs p-2.5 rounded-lg border border-border bg-white"
                       />
                     </div>
+
                     <div className="flex gap-2 pt-1">
                       <button
                         type="button"
@@ -452,6 +589,7 @@ export function Checkout() {
                       >
                         Save & Select Address
                       </button>
+
                       <button
                         type="button"
                         onClick={() => setShowAddForm(false)}
@@ -467,24 +605,28 @@ export function Checkout() {
                       <div
                         key={a.id}
                         onClick={() => setSelectedAddressId(a.id)}
-                        className={`cursor-pointer p-4 rounded-xl border text-sm transition relative ${selectedAddressId === a.id
+                        className={`cursor-pointer p-4 rounded-xl border text-sm transition relative ${
+                          selectedAddressId === a.id
                             ? "border-gold bg-cream/40 text-espresso font-medium shadow-xs"
                             : "border-border hover:border-gold text-espresso"
-                          }`}
+                        }`}
                       >
                         <div className="flex items-center justify-between mb-1">
                           <span className="font-bold text-[10px] label-caps text-gold-dark">
                             {a.label}
                           </span>
+
                           {selectedAddressId === a.id && (
                             <span className="text-[10px] bg-gold text-white px-2 py-0.5 rounded-full font-medium">
                               Selected
                             </span>
                           )}
                         </div>
+
                         <p className="text-xs text-espresso mt-1">
                           {a.addressLine}
                         </p>
+
                         <p className="text-xs text-muted-foreground mt-0.5">
                           {a.city}, {a.state} — {a.pincode}
                         </p>
@@ -499,7 +641,7 @@ export function Checkout() {
               </div>
             </div>
 
-            {/* Order Summary Sidebar */}
+            {/* Order Summary */}
             <div className="bg-panel rounded-2xl p-6 h-fit border border-border shadow-xs">
               <h3 className="font-serif text-xl text-espresso mb-4">
                 Order Summary
@@ -507,9 +649,18 @@ export function Checkout() {
 
               <div className="space-y-3 text-sm divide-y divide-border/60">
                 {items.map((i: any) => {
-                  const weightVal = Number(i.p.weight ?? i.p.grossWeight ?? 0);
-                  const bd = computeBreakdown(weightVal, i.p.purity || "22K");
-                  const itemPrice = bd?.total ? bd.total : Number(i.p.price || 0);
+                  const weightVal = Number(
+                    i.p.weight ?? i.p.grossWeight ?? 0
+                  );
+
+                  const bd = computeBreakdown(
+                    weightVal,
+                    i.p.purity || "22K"
+                  );
+
+                  const itemPrice = bd?.total
+                    ? bd.total
+                    : Number(i.p.price || 0);
 
                   return (
                     <div
@@ -520,10 +671,12 @@ export function Checkout() {
                         <p className="font-medium text-sm truncate max-w-45">
                           {i.p.name}
                         </p>
+
                         <p className="text-xs text-muted-foreground">
                           {weightVal}g · {i.p.purity || "22K"} × {i.qty}
                         </p>
                       </div>
+
                       <span className="font-semibold">
                         {formatINR(itemPrice * i.qty)}
                       </span>
@@ -544,7 +697,9 @@ export function Checkout() {
                 disabled={loading}
                 className="pill-gold w-full justify-center mt-5 flex py-3 text-sm font-semibold tracking-wider uppercase transition disabled:opacity-50"
               >
-                {loading ? "Opening Razorpay..." : "Pay & Place Order"}
+                {loading
+                  ? "Opening Razorpay..."
+                  : "Pay & Place Order"}
               </button>
             </div>
           </form>

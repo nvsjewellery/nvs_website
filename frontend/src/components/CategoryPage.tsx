@@ -13,25 +13,30 @@ interface CategoryPageProps {
 // Helper function to safely extract subcategory string from product object
 function getSubCategory(p: Product): string {
   if (!p) return "";
+
   const raw = p as unknown as Record<string, unknown>;
+
   const val = (
-    p.sub || 
-    raw.subCategory || 
-    raw.category || 
-    p.category || 
+    p.sub ||
+    raw.subCategory ||
+    raw.category ||
+    p.category ||
     ""
   ) as string;
 
   return val.trim();
 }
 
-export function CategoryPage({ metal, description }: CategoryPageProps) {
+export function CategoryPage({
+  metal,
+  description,
+}: CategoryPageProps) {
   const searchParams = useSearch({ strict: false }) as { cat?: string };
   const initialCat = searchParams?.cat || "All";
 
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [selectedSub, setSelectedSub] = useState<string>(initialCat);
+  const [selectedSub, setSelectedSub] = useState(initialCat);
   const [loading, setLoading] = useState(true);
 
   // Sync selected subcategory if URL parameter changes
@@ -44,7 +49,7 @@ export function CategoryPage({ metal, description }: CategoryPageProps) {
   useEffect(() => {
     let cancelled = false;
 
-    // Fetch data (will resolve instantly if cached in api.ts)
+    // Fetch data
     Promise.all([
       productsApi.getByMetal(metal),
       categoriesApi.getByMetal(metal),
@@ -59,7 +64,9 @@ export function CategoryPage({ metal, description }: CategoryPageProps) {
         console.error("Error loading category data:", err);
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       });
 
     return () => {
@@ -72,17 +79,25 @@ export function CategoryPage({ metal, description }: CategoryPageProps) {
     selectedSub === "All"
       ? products
       : products.filter(
-          (p) => getSubCategory(p).toLowerCase() === selectedSub.toLowerCase()
+          (p) =>
+            getSubCategory(p).toLowerCase() ===
+            selectedSub.toLowerCase()
         );
 
   return (
     <Layout>
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="mb-8 bg-[color:var(--cream)] border border-[color:var(--gold)]/20 p-8 rounded-2xl text-center">
-          <h1 className="font-serif text-4xl md:text-5xl text-[color:var(--espresso)]">
+      <div className="max-w-7xl mx-auto px-4 py-10">
+        {/* Page Header */}
+        <div className="mb-10">
+          <p className="label-caps text-xs text-[color:var(--gold-dark)] uppercase tracking-wider font-semibold">
+            NVS Jewellery
+          </p>
+
+          <h1 className="font-serif text-3xl md:text-4xl mt-1 text-[color:var(--espresso)]">
             {metal} Collection
           </h1>
-          <p className="text-sm text-[color:var(--muted-foreground)] mt-2">
+
+          <p className="text-sm text-[color:var(--muted-foreground)] mt-2 max-w-2xl">
             {description}
           </p>
         </div>
@@ -96,9 +111,11 @@ export function CategoryPage({ metal, description }: CategoryPageProps) {
               </h3>
 
               <div className="space-y-1">
+                {/* All Categories Button */}
                 <button
+                  type="button"
                   onClick={() => setSelectedSub("All")}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition ${
+                  className={`w-full cursor-pointer text-left px-3 py-2 rounded-lg text-sm font-medium transition ${
                     selectedSub === "All"
                       ? "bg-[color:var(--gold)] text-white"
                       : "hover:bg-[color:var(--cream)] text-[color:var(--espresso)]"
@@ -107,12 +124,15 @@ export function CategoryPage({ metal, description }: CategoryPageProps) {
                   All
                 </button>
 
+                {/* Dynamic Category Buttons */}
                 {categories.map((cat) => (
                   <button
+                    type="button"
                     key={cat.id}
                     onClick={() => setSelectedSub(cat.name)}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition ${
-                      selectedSub.toLowerCase() === cat.name.toLowerCase()
+                    className={`w-full cursor-pointer text-left px-3 py-2 rounded-lg text-sm font-medium transition ${
+                      selectedSub.toLowerCase() ===
+                      cat.name.toLowerCase()
                         ? "bg-[color:var(--gold)] text-white"
                         : "hover:bg-[color:var(--cream)] text-[color:var(--espresso)]"
                     }`}
@@ -146,7 +166,10 @@ export function CategoryPage({ metal, description }: CategoryPageProps) {
             ) : filteredProducts.length > 0 ? (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-5">
                 {filteredProducts.map((product) => (
-                  <ProductCard key={product.id} p={product} />
+                  <ProductCard
+                    key={product.id}
+                    p={product}
+                  />
                 ))}
               </div>
             ) : (
