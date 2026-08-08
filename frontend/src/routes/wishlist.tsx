@@ -12,6 +12,7 @@ export const Route = createFileRoute("/wishlist")({
 
 function Wishlist() {
   const wishlist = useStore((s) => s.wishlist);
+
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -25,11 +26,15 @@ function Wishlist() {
         return;
       }
 
+      setLoading(true);
+
       try {
         const productPromises = wishlist.map((id: string) =>
           productsApi.getById(id).catch(() => null)
         );
+
         const results = await Promise.all(productPromises);
+
         const validProducts = results.filter(Boolean);
 
         if (isMounted) {
@@ -37,8 +42,14 @@ function Wishlist() {
         }
       } catch (err) {
         console.error("Failed to load wishlist items:", err);
+
+        if (isMounted) {
+          setItems([]);
+        }
       } finally {
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     }
 
@@ -47,19 +58,25 @@ function Wishlist() {
     return () => {
       isMounted = false;
     };
-  }, [wishlist.join(",")]); // <--- Keeps reference stable so it doesn't re-trigger continuously
+  }, [wishlist.join(",")]);
 
   return (
     <Layout>
       <div className="max-w-7xl mx-auto px-4 py-10">
+        {/* ==================== HEADER ==================== */}
+
         <h1 className="font-serif text-4xl md:text-5xl text-[color:var(--espresso)]">
           Your Wishlist
         </h1>
-        <p className="text-[color:var(--gold-dark)] mt-2 text-sm label-caps">
-          {wishlist.length} saved {wishlist.length === 1 ? "item" : "items"}
+
+        <p className="text-sm text-[color:var(--muted-foreground)] mt-2">
+          {wishlist.length} saved{" "}
+          {wishlist.length === 1 ? "item" : "items"}
         </p>
 
-        <OrnamentalDivider />
+        <OrnamentalDivider className="mt-6 mb-8" />
+
+        {/* ==================== LOADING ==================== */}
 
         {loading ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
@@ -71,15 +88,24 @@ function Wishlist() {
             ))}
           </div>
         ) : items.length === 0 ? (
+          /* ==================== EMPTY WISHLIST ==================== */
+
           <div className="text-center py-20">
             <p className="text-[color:var(--muted-foreground)] max-w-md mx-auto">
-              Your wishlist is empty. Tap the heart on any product to save it here.
+              Your wishlist is empty. Tap the heart on any product to save it
+              here.
             </p>
-            <Link to="/gold" className="pill-gold mt-6 inline-flex">
+
+            <Link
+              to="/gold"
+              className="pill-gold mt-6 inline-flex cursor-pointer"
+            >
               Browse Collection
             </Link>
           </div>
         ) : (
+          /* ==================== WISHLIST PRODUCTS ==================== */
+
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
             {items.map((p: any) => (
               <ProductCard key={p.id} p={p} />
