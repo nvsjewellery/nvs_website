@@ -1,5 +1,5 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Heart, Minus, Plus } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { OrnamentalDivider } from "@/components/OrnamentalDivider";
@@ -9,10 +9,15 @@ import { actions, formatINR, useStore } from "@/lib/store";
 
 export const Route = createFileRoute("/product/$id")({
   component: ProductPage,
+
   loader: async ({ params }) => {
     try {
       const p = await productsApi.getById(params.id);
-      if (!p) throw notFound();
+
+      if (!p) {
+        throw notFound();
+      }
+
       return p;
     } catch {
       throw notFound();
@@ -25,116 +30,272 @@ function ProductPage() {
   const p = rawData?.product || rawData || {};
 
   const [qty, setQty] = useState(1);
+  const [selectedImg, setSelectedImg] = useState<string | null>(null);
+
   const wishlist = useStore((s) => s.wishlist);
   const saved = wishlist.includes(p?.id);
 
-  const productImages = useMemo(() => {
-    const rawList = Array.isArray(p?.images) && p.images.length > 0 ? p.images : [p?.image];
-    return Array.from(new Set(rawList.filter(Boolean)));
+  /*
+   * Explicitly make this string[].
+   * This fixes the TypeScript "unknown is not assignable to string" error.
+   */
+  const productImages = useMemo<string[]>(() => {
+    const images: string[] = [];
+
+    if (Array.isArray(p?.images)) {
+      for (const image of p.images) {
+        if (typeof image === "string" && image.trim()) {
+          images.push(image);
+        }
+      }
+    }
+
+    if (images.length === 0 && typeof p?.image === "string") {
+      if (p.image.trim()) {
+        images.push(p.image);
+      }
+    }
+
+    return Array.from(new Set(images));
   }, [p]);
 
-  const [selectedImg, setSelectedImg] = useState<string | null>(null);
-  const currentImage = selectedImg || productImages[0] || p?.image || "";
+  const currentImage =
+    selectedImg || productImages[0] || "";
 
-  const weightVal = Number(p?.weight ?? p?.grossWeight ?? 0);
+  const weightVal = Number(
+    p?.weight ?? p?.grossWeight ?? 0
+  );
 
-  // Trust the backend's numbers completely — no local recomputation, no rate guessing.
+  // Trust backend pricing completely.
   const total = Number(p?.price ?? 0);
   const metalValue = Number(p?.metalValue ?? 0);
   const making = Number(p?.making ?? 0);
   const gst = Number(p?.gst ?? 0);
 
-  const rawDesc = String(p?.description || p?.desc || p?.details || p?.summary || "").trim();
+  const rawDesc = String(
+    p?.description ||
+      p?.desc ||
+      p?.details ||
+      p?.summary ||
+      ""
+  ).trim();
 
   return (
     <Layout>
-      <div className="max-w-7xl mx-auto px-4 py-6 text-xs label-caps text-[color:var(--gold-dark)]">
-        <Link to="/">Home</Link> <span className="mx-1">/</span>
-        <Link to={`/${metalSlug(p.metal || "Gold")}` as string}>{p.metal || "Gold"}</Link> <span className="mx-1">/</span>
-        <span className="text-[color:var(--espresso)]">{p.name}</span>
+      {/* Breadcrumb */}
+      <div className="max-w-7xl mx-auto px-4 py-6 text-sm text-[color:var(--muted-foreground)]">
+        <Link
+          to="/"
+          className="cursor-pointer hover:text-[color:var(--gold-dark)] transition-colors"
+        >
+          Home
+        </Link>
+
+        <span> / </span>
+
+        <Link
+          to={`/${metalSlug(p.metal || "Gold")}` as string}
+          className="cursor-pointer hover:text-[color:var(--gold-dark)] transition-colors"
+        >
+          {p.metal || "Gold"}
+        </Link>
+
+        <span> / </span>
+
+        <span className="text-[color:var(--espresso)]">
+          {p.name}
+        </span>
       </div>
 
       <section className="max-w-7xl mx-auto px-4 grid grid-cols-1 lg:grid-cols-2 gap-10">
+        {/* ==================== PRODUCT IMAGES ==================== */}
         <div>
+          {/* Main Image */}
           <div className="aspect-square bg-[color:var(--panel)] rounded-2xl overflow-hidden border border-[color:var(--border)]">
-            <img src={currentImage} alt={p.name} className="w-full h-full object-cover" />
+            {currentImage ? (
+              <img
+                src={currentImage}
+                alt={p.name || "Product image"}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full grid place-items-center text-sm text-[color:var(--muted-foreground)]">
+                No image available
+              </div>
+            )}
           </div>
 
+          {/* Thumbnail Images */}
           {productImages.length > 1 && (
             <div className="grid grid-cols-4 gap-3 mt-3">
               {productImages.map((imgUrl, i) => (
-                <div
-                  key={i}
-                  onClick={() => setSelectedImg(String(imgUrl))}
+                <button
+                  key={`${imgUrl}-${i}`}
+                  type="button"
+                  onClick={() => setSelectedImg(imgUrl)}
                   className={`aspect-square bg-[color:var(--panel)] rounded-lg overflow-hidden border cursor-pointer transition-colors ${
                     currentImage === imgUrl
                       ? "border-[color:var(--gold)] ring-1 ring-[color:var(--gold)]"
                       : "border-[color:var(--border)] hover:border-[color:var(--gold)]"
                   }`}
+                  aria-label={`View product image ${i + 1}`}
                 >
-                  <img src={String(imgUrl)} alt="" className="w-full h-full object-cover" />
-                </div>
+                  <img
+                    src={imgUrl}
+                    alt={`${p.name || "Product"} image ${i + 1}`}
+                    className="w-full h-full object-cover"
+                  />
+                </button>
               ))}
             </div>
           )}
         </div>
 
+        {/* ==================== PRODUCT DETAILS ==================== */}
         <div>
           <p className="label-caps text-[color:var(--gold-dark)] text-xs">
             {p.metal} · {p.sub || p.category}
           </p>
-          <h1 className="font-serif text-4xl md:text-5xl mt-2 text-[color:var(--espresso)]">{p.name}</h1>
+
+          <h1 className="font-serif text-4xl md:text-5xl mt-2 text-[color:var(--espresso)]">
+            {p.name}
+          </h1>
+
+          {/* Purity + Weight */}
           <div className="flex items-center gap-3 mt-4">
-            <span className="pill-gold-outline !py-1 !px-3 text-xs">{p.purity}</span>
-            <span className="text-sm text-[color:var(--muted-foreground)]">{weightVal} g</span>
+            <span className="pill-gold-outline !py-1 !px-3 text-xs">
+              {p.purity}
+            </span>
+
+            <span className="text-sm text-[color:var(--muted-foreground)]">
+              {weightVal} g
+            </span>
           </div>
+
+          {/* Price */}
           <div className="mt-6">
             <div className="text-4xl font-serif text-[color:var(--gold-dark)] font-bold">
               {formatINR(total)}
             </div>
+
             <p className="text-xs text-[color:var(--muted-foreground)] mt-1">
               Inclusive of GST · Includes making charges
             </p>
           </div>
 
-          <div style={{ backgroundColor: "var(--panel)" }} className="rounded-2xl p-5 mt-6">
-            <p className="label-caps text-[color:var(--gold-dark)] text-[10px] mb-3">Live Price Breakdown</p>
-            <BreakdownRow l={`Metal value (${weightVal}g @ ${p.purity})`} v={metalValue} />
-            <BreakdownRow l="Making charges" v={making} />
-            <BreakdownRow l="GST (3%)" v={gst} />
+          {/* ==================== PRICE BREAKDOWN ==================== */}
+          <div
+            style={{
+              backgroundColor: "var(--panel)",
+            }}
+            className="rounded-2xl p-5 mt-6"
+          >
+            <p className="label-caps text-[color:var(--gold-dark)] text-[10px] mb-3">
+              Live Price Breakdown
+            </p>
+
+            <BreakdownRow
+              l={`Metal value (${weightVal}g @ ${p.purity})`}
+              v={metalValue}
+            />
+
+            <BreakdownRow
+              l="Making charges"
+              v={making}
+            />
+
+            <BreakdownRow
+              l="GST (3%)"
+              v={gst}
+            />
+
             <div className="h-px bg-[color:var(--gold)]/30 my-3" />
-            <BreakdownRow l="Total" v={total} bold />
+
+            <BreakdownRow
+              l="Total"
+              v={total}
+              bold
+            />
           </div>
 
+          {/* ==================== ACTIONS ==================== */}
           <div className="flex items-center gap-3 mt-6 flex-wrap">
+            {/* Quantity Selector */}
             <div className="flex items-center border border-[color:var(--border)] rounded-full">
-              <button onClick={() => setQty(Math.max(1, qty - 1))} className="p-2.5">
+              <button
+                type="button"
+                onClick={() =>
+                  setQty((current) => Math.max(1, current - 1))
+                }
+                className="p-2.5 cursor-pointer hover:bg-[color:var(--panel)] rounded-full transition-colors"
+                aria-label="Decrease quantity"
+              >
                 <Minus className="w-4 h-4" />
               </button>
-              <span className="w-8 text-center font-semibold">{qty}</span>
-              <button onClick={() => setQty(qty + 1)} className="p-2.5">
+
+              <span className="w-8 text-center font-semibold">
+                {qty}
+              </span>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setQty((current) => current + 1)
+                }
+                className="p-2.5 cursor-pointer hover:bg-[color:var(--panel)] rounded-full transition-colors"
+                aria-label="Increase quantity"
+              >
                 <Plus className="w-4 h-4" />
               </button>
             </div>
-            <button onClick={() => actions.addToCart(p.id, qty)} className="pill-gold">
+
+            {/* Add To Cart */}
+            <button
+              type="button"
+              onClick={() => actions.addToCart(p.id, qty)}
+              className="pill-gold cursor-pointer"
+            >
               Add to Cart
             </button>
-            <Link to="/checkout" onClick={() => actions.addToCart(p.id, qty)} className="pill-gold-outline">
+
+            {/* Buy Now */}
+            <Link
+              to="/checkout"
+              onClick={() => actions.addToCart(p.id, qty)}
+              className="pill-gold-outline cursor-pointer"
+            >
               Buy Now
             </Link>
+
+            {/* Wishlist */}
             <button
+              type="button"
               onClick={() => actions.toggleWishlist(p.id)}
-              className="w-11 h-11 rounded-full border border-[color:var(--gold)] grid place-items-center"
+              className="w-11 h-11 rounded-full border border-[color:var(--gold)] grid place-items-center cursor-pointer hover:bg-[color:var(--panel)] transition-colors"
+              aria-label={
+                saved
+                  ? "Remove from wishlist"
+                  : "Add to wishlist"
+              }
             >
-              <Heart className={`w-4 h-4 ${saved ? "fill-[color:var(--gold)] text-[color:var(--gold)]" : "text-[color:var(--gold-dark)]"}`} />
+              <Heart
+                className={`w-4 h-4 ${
+                  saved
+                    ? "fill-[color:var(--gold)] text-[color:var(--gold)]"
+                    : "text-[color:var(--gold-dark)]"
+                }`}
+              />
             </button>
           </div>
 
+          {/* Description */}
           <div className="mt-8 pt-6 border-t border-[color:var(--border)]">
             <p className="text-sm text-[color:var(--muted-foreground)] leading-relaxed whitespace-pre-line">
               {rawDesc.length > 0
                 ? rawDesc
-                : `${p.name} — crafted in ${p.purity} ${p.metal?.toLowerCase()} weighing ${weightVal}g. Traditional hand-finishing with heritage techniques.`}
+                : `${p.name} — crafted in ${
+                    p.purity
+                  } ${p.metal?.toLowerCase()} weighing ${weightVal}g. Traditional hand-finishing with heritage techniques.`}
             </p>
           </div>
         </div>
@@ -145,9 +306,23 @@ function ProductPage() {
   );
 }
 
-function BreakdownRow({ l, v, bold }: { l: string; v: number; bold?: boolean }) {
+function BreakdownRow({
+  l,
+  v,
+  bold,
+}: {
+  l: string;
+  v: number;
+  bold?: boolean;
+}) {
   return (
-    <div className={`flex justify-between text-sm py-1 ${bold ? "font-bold text-[color:var(--espresso)] text-base" : "text-[color:var(--muted-foreground)]"}`}>
+    <div
+      className={`flex justify-between text-sm py-1 ${
+        bold
+          ? "font-bold text-[color:var(--espresso)] text-base"
+          : "text-[color:var(--muted-foreground)]"
+      }`}
+    >
       <span>{l}</span>
       <span>{formatINR(v)}</span>
     </div>
