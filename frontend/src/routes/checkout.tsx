@@ -6,6 +6,7 @@ import {
 
 import {
   useEffect,
+  useMemo,
   useState,
   type FormEvent,
 } from "react";
@@ -71,17 +72,6 @@ type InitiatePaymentResponse = {
 
   subTotal?: number;
 
-  /*
-   * IMPORTANT:
-   *
-   * This is the TOTAL backend discount.
-   *
-   * It may contain:
-   *
-   * - seasonal discount
-   * - customer discount
-   * - coupon discount
-   */
   discount?: number;
 
   total?: number;
@@ -185,19 +175,31 @@ export function Checkout() {
      APPLIED COUPON
   ======================================================= */
 
-  /*
-   * Coupon entry happens in the cart.
-   * Checkout only displays the coupon returned by the backend.
-   */
   const [appliedCoupon, setAppliedCoupon] =
-    useState<string | null>(null);
+    useState<Discount | null>(() => {
+      if (typeof window === "undefined") {
+        return null;
+      }
 
-  /*
-   * Total discount returned by the backend.
-   * This may include customer, seasonal and coupon discounts.
-   */
+      try {
+        const stored = sessionStorage.getItem(
+          "nvs-applied-coupon"
+        );
+
+        return stored
+          ? (JSON.parse(stored) as Discount)
+          : null;
+      } catch {
+        return null;
+      }
+    });
+
+  /* =======================================================
+     BACKEND PRICING OVERRIDES
+  ======================================================= */
+
   const [backendDiscount, setBackendDiscount] =
-    useState(0);
+    useState<number | null>(null);
 
   const [backendSubtotal, setBackendSubtotal] =
     useState<number | null>(null);
@@ -206,11 +208,11 @@ export function Checkout() {
     useState<number | null>(null);
 
   /* =======================================================
-     CUSTOMER DISCOUNT
+     DISCOUNTS STATE
   ======================================================= */
 
-  const [customerDiscount, setCustomerDiscount] =
-    useState<Discount | null>(null);
+  const [availableDiscounts, setAvailableDiscounts] =
+    useState<Discount[]>([]);
 
   const [
     loadingCustomerDiscount,
@@ -282,32 +284,16 @@ export function Checkout() {
   }, [user, phone]);
 
   /* =======================================================
-     LOAD CUSTOMER DISCOUNT
+     LOAD ALL DISCOUNTS (Customer + Seasonal)
   ======================================================= */
 
   useEffect(() => {
-    if (!user) {
-      setCustomerDiscount(null);
-      return;
-    }
-
     let isMounted = true;
 
-    async function loadCustomerDiscount() {
+    async function loadDiscounts() {
       setLoadingCustomerDiscount(true);
 
       try {
-        /*
-         * IMPORTANT:
-         *
-         * discountsApi.getAvailable()
-         * already calls:
-         *
-         * GET /discounts/available
-         *
-         * with the authentication token.
-         */
-
         const discounts =
           await discountsApi.getAvailable();
 
@@ -315,36 +301,15 @@ export function Checkout() {
           return;
         }
 
-        /*
-         * Find the discount assigned specifically
-         * to this customer.
-         */
-
-        const customerDiscounts =
-          discounts.filter(
-            (discount) =>
-              discount.type === "CUSTOMER" &&
-              discount.target === "CUSTOMER"
-          );
-
-        /*
-         * Usually there should be only one.
-         *
-         * If multiple exist, keep the first one
-         * returned by backend.
-         */
-
-        setCustomerDiscount(
-          customerDiscounts[0] || null
-        );
+        setAvailableDiscounts(discounts || []);
       } catch (error) {
         console.error(
-          "Failed to load customer discount:",
+          "Failed to load available discounts:",
           error
         );
 
         if (isMounted) {
-          setCustomerDiscount(null);
+          setAvailableDiscounts([]);
         }
       } finally {
         if (isMounted) {
@@ -353,7 +318,7 @@ export function Checkout() {
       }
     }
 
-    loadCustomerDiscount();
+    loadDiscounts();
 
     return () => {
       isMounted = false;
@@ -664,143 +629,224 @@ export function Checkout() {
   );
 
   /* =======================================================
-     FRONTEND CALCULATED SUBTOTAL
+     DISCOUNT HELPERS
   ======================================================= */
 
-  const calculatedSubtotal =
-    items.reduce(
-      (sum, item) => {
-        const weightVal =
-          Number(
-            item.p.weight ??
-              item.p.grossWeight ??
-              0
-          );
+  function getProductCategory(product: any) {
+    return String(product?.category ?? product?.sub ?? "")
+      .trim()
+      .toLowerCase();
+  }
 
-        const breakdown =
-          computeBreakdown(
-            weightVal,
-            item.p.purity ||
-              "22K"
-          );
+  function discountAppliesToProduct(discount: Discount, product: any) {
+    if (!discount || !product) {
+      return false;
+    }
 
-        const itemPrice =
-          breakdown?.total
-            ? breakdown.total
-            : Number(
-                item.p.price || 0
-              );
+    if (discount.metal && discount.metal !== product.metal) {
+      return false;
+    }
 
-        return (
-          sum +
-          itemPrice *
-            item.qty
-        );
-      },
-      0
-    );
+    if (discount.target === "PRODUCT") {
+      return (
+        discount.products?.some(
+          (discountProduct) => discountProduct.id === product.id
+        ) ?? false
+      );
+    }
 
-  /* =======================================================
-     CART VA TOTAL
-  ======================================================= */
-
-  /*
-   * Customer discounts apply ONLY to VA /
-   * making charges.
-   *
-   * They do NOT apply to the complete
-   * jewellery price.
-   */
-
-  const cartVaTotal = items.reduce(
-    (sum, item) => {
-      const vaAmount =
-        Number(
-          item.p.va ??
-            item.p.making ??
-            0
-        );
+    if (discount.target === "CATEGORY") {
+      const productCategory = getProductCategory(product);
+      const discountCategory = String(discount.category ?? "")
+        .trim()
+        .toLowerCase();
 
       return (
-        sum +
-        vaAmount *
-          item.qty
+        productCategory !== "" &&
+        discountCategory !== "" &&
+        productCategory === discountCategory
       );
-    },
+    }
+
+    if (discount.target === "CART") {
+      return true;
+    }
+
+    return false;
+  }
+
+  function getProductVa(product: any, breakdown: any) {
+    return Number(
+      product?.va ?? product?.making ?? breakdown?.making ?? 0
+    );
+  }
+
+  function calculateDiscountAmount(vaAmount: number, discount: Discount) {
+    const va = Number(vaAmount || 0);
+    const value = Number(discount.value || 0);
+
+    if (va <= 0 || value <= 0) {
+      return 0;
+    }
+
+    let amount = 0;
+    if (discount.kind === "percent") {
+      amount = (va * value) / 100;
+    } else if (discount.kind === "flat") {
+      amount = value;
+    }
+
+    return Math.min(Math.max(amount, 0), va);
+  }
+
+  function getBestProductDiscount(product: any): Discount | null {
+    const candidates: Discount[] = [];
+
+    const seasonalDiscounts = availableDiscounts.filter((discount) => {
+      if (discount.type !== "SEASONAL") {
+        return false;
+      }
+      return discountAppliesToProduct(discount, product);
+    });
+
+    candidates.push(...seasonalDiscounts);
+
+    if (
+      appliedCoupon &&
+      appliedCoupon.type === "COUPON" &&
+      (appliedCoupon.target === "PRODUCT" || appliedCoupon.target === "CATEGORY")
+    ) {
+      if (discountAppliesToProduct(appliedCoupon, product)) {
+        candidates.push(appliedCoupon);
+      }
+    }
+
+    if (candidates.length === 0) {
+      return null;
+    }
+
+    let bestDiscount: Discount | null = null;
+    let bestAmount = 0;
+
+    for (const discount of candidates) {
+      const weightVal = Number(product?.weight ?? product?.grossWeight ?? 0);
+      const breakdown = computeBreakdown(weightVal, product?.purity || "22K");
+      const vaAmount = getProductVa(product, breakdown);
+      const amount = calculateDiscountAmount(vaAmount, discount);
+
+      if (amount > bestAmount) {
+        bestAmount = amount;
+        bestDiscount = discount;
+      }
+    }
+
+    return bestDiscount;
+  }
+
+  /* =======================================================
+     CALCULATE CART ITEMS WITH ALL DISCOUNTS
+  ======================================================= */
+
+  const calculatedItems = useMemo(() => {
+    return items.map((item: any) => {
+      const weightVal = Number(item.p.weight ?? item.p.grossWeight ?? 0);
+      const breakdown = computeBreakdown(weightVal, item.p.purity || "22K");
+      const itemPrice = breakdown?.total
+        ? breakdown.total
+        : Number(item.p.price || 0);
+
+      const vaAmount = getProductVa(item.p, breakdown);
+      const productDiscount = getBestProductDiscount(item.p);
+      const discountPerUnit = productDiscount
+        ? calculateDiscountAmount(vaAmount, productDiscount)
+        : 0;
+
+      const originalTotal = itemPrice * item.qty;
+      const discountTotal = discountPerUnit * item.qty;
+      const finalTotal = Math.max(originalTotal - discountTotal, 0);
+
+      return {
+        ...item,
+        weightVal,
+        breakdown,
+        itemPrice,
+        vaAmount,
+        productDiscount,
+        discountPerUnit,
+        originalTotal,
+        discountTotal,
+        finalTotal,
+      };
+    });
+  }, [items, availableDiscounts, appliedCoupon]);
+
+  /* =======================================================
+     FRONTEND CALCULATED TOTALS
+  ======================================================= */
+
+  const calculatedSubtotal = calculatedItems.reduce(
+    (sum: number, item: any) => sum + item.originalTotal,
     0
   );
 
-  /* =======================================================
-     PRICE COMPONENTS
-  ======================================================= */
-
-  /*
-   * Customer discounts apply only to VA / making charges.
-   */
-  const displayVaTotal = cartVaTotal;
-
-  /*
-   * Display-only metal value. The backend remains the source
-   * of truth for the final payable amount.
-   */
-  const displayMetalTotal = Math.max(
-    calculatedSubtotal -
-      displayVaTotal,
+  const productDiscountTotal = calculatedItems.reduce(
+    (sum: number, item: any) => sum + item.discountTotal,
     0
   );
 
-  /* =======================================================
-     CUSTOMER DISCOUNT AMOUNT
-  ======================================================= */
+  const cartVaTotal = calculatedItems.reduce(
+    (sum: number, item: any) => sum + item.vaAmount * item.qty,
+    0
+  );
 
-  const customerDiscountAmount =
-    customerDiscount &&
-    cartVaTotal > 0
-      ? customerDiscount.kind ===
-        "percent"
-        ? Math.min(
-            (cartVaTotal *
-              Number(
-                customerDiscount.value
-              )) /
-              100,
-            cartVaTotal
-          )
-        : Math.min(
-            Number(
-              customerDiscount.value
-            ),
-            cartVaTotal
-          )
+  const customerDiscount = availableDiscounts
+    .filter(
+      (discount) =>
+        discount.type === "CUSTOMER" && discount.target === "CUSTOMER"
+    )
+    .reduce((best: Discount | null, current) => {
+      if (!best) return current;
+
+      const bestAmount = calculateDiscountAmount(cartVaTotal, best);
+      const currentAmount = calculateDiscountAmount(cartVaTotal, current);
+
+      return currentAmount > bestAmount ? current : best;
+    }, null);
+
+  const customerDiscountAmount = customerDiscount
+    ? calculateDiscountAmount(cartVaTotal, customerDiscount)
+    : 0;
+
+  const cartCouponAmount =
+    appliedCoupon &&
+    appliedCoupon.type === "COUPON" &&
+    appliedCoupon.target === "CART"
+      ? calculateDiscountAmount(cartVaTotal, appliedCoupon)
       : 0;
 
+  const requestedTotalDiscount =
+    productDiscountTotal + customerDiscountAmount + cartCouponAmount;
+
+  const totalDiscount = Math.min(
+    Math.max(requestedTotalDiscount, 0),
+    cartVaTotal
+  );
+
+  const estimatedTotal = Math.max(calculatedSubtotal - totalDiscount, 0);
+
   /* =======================================================
-     DISPLAY TOTAL
+     PRICE COMPONENTS FOR SUMMARY
   ======================================================= */
 
-  /*
-   * Before backend payment initiation:
-   *
-   * We can show an estimated total after
-   * the customer's assigned discount.
-   *
-   * Backend remains the source of truth.
-   */
+  const displayVaTotal = cartVaTotal;
 
-  const estimatedCustomerTotal =
-    Math.max(
-      calculatedSubtotal -
-        customerDiscountAmount,
-      0
-    );
+  const displayMetalTotal = Math.max(
+    calculatedSubtotal - displayVaTotal,
+    0
+  );
 
-  const displaySubtotal =
-    backendSubtotal ??
-    calculatedSubtotal;
-
-  const displayTotal =
-    backendTotal ??
-    estimatedCustomerTotal;
+  const displaySubtotal = backendSubtotal ?? calculatedSubtotal;
+  const displayTotal = backendTotal ?? estimatedTotal;
 
   /* =======================================================
      PLACE ORDER
@@ -894,11 +940,6 @@ export function Checkout() {
          INITIATE PAYMENT
       ===================================================== */
 
-      /*
-       * Coupon entry is handled in the cart.
-       * Checkout sends no new coupon input.
-       * The backend remains the source of truth for final pricing.
-       */
       const paymentResponse =
         (await api.post(
           "/orders/initiate-payment",
@@ -949,25 +990,12 @@ export function Checkout() {
         );
       }
 
-      /*
-       * IMPORTANT:
-       *
-       * Backend discount is the complete discount,
-       * not coupon-only discount.
-       */
-
       if (
         typeof paymentResponse.discount ===
         "number"
       ) {
         setBackendDiscount(
           paymentResponse.discount
-        );
-      }
-
-      if (paymentResponse.coupon?.code) {
-        setAppliedCoupon(
-          paymentResponse.coupon.code
         );
       }
 
@@ -989,20 +1017,8 @@ export function Checkout() {
       ===================================================== */
 
       const options: RazorpayOptions = {
-        /*
-         * TEST KEY
-         *
-         * Replace with live key for production.
-         */
-
         key:
           "rzp_test_TIZNsDeMd9h0Dx",
-
-        /*
-         * IMPORTANT:
-         *
-         * This comes directly from backend.
-         */
 
         amount:
           razorpayOrder.amount,
@@ -1031,10 +1047,6 @@ export function Checkout() {
             response
           ) {
             try {
-              /* =============================================
-                 VERIFY PAYLOAD
-              ============================================= */
-
               const verifyPayload: Record<
                 string,
                 unknown
@@ -1055,11 +1067,6 @@ export function Checkout() {
                   phone.trim(),
               };
 
-              /* =============================================
-                 STEP 2
-                 VERIFY + PLACE ORDER
-              ============================================= */
-
               const result =
                 (await api.post(
                   "/orders/verify-and-place",
@@ -1075,15 +1082,7 @@ export function Checkout() {
                 );
               }
 
-              /* =============================================
-                 CLEAR LOCAL CART
-              ============================================= */
-
               actions.clearCart();
-
-              /* =============================================
-                 GO TO ACCOUNT
-              ============================================= */
 
               navigate({
                 to: "/account",
@@ -1104,10 +1103,6 @@ export function Checkout() {
             }
           },
 
-        /* ===================================================
-           PREFILL
-        =================================================== */
-
         prefill: {
           name:
             user?.name ||
@@ -1121,18 +1116,10 @@ export function Checkout() {
             phone.trim(),
         },
 
-        /* ===================================================
-           THEME
-        =================================================== */
-
         theme: {
           color:
             "#B8860B",
         },
-
-        /* ===================================================
-           MODAL
-        =================================================== */
 
         modal: {
           ondismiss:
@@ -1141,10 +1128,6 @@ export function Checkout() {
             },
         },
       };
-
-      /* =====================================================
-         OPEN RAZORPAY
-      ===================================================== */
 
       const razorpay =
         new window.Razorpay(
@@ -1248,34 +1231,8 @@ export function Checkout() {
 
                 <div className="space-y-4 divide-y divide-[color:var(--border)]/60">
 
-                  {items.map(
+                  {calculatedItems.map(
                     (item) => {
-                      const weightVal =
-                        Number(
-                          item.p
-                            .weight ??
-                            item.p
-                              .grossWeight ??
-                            0
-                        );
-
-                      const breakdown =
-                        computeBreakdown(
-                          weightVal,
-                          item.p
-                            .purity ||
-                            "22K"
-                        );
-
-                      const itemPrice =
-                        breakdown?.total
-                          ? breakdown.total
-                          : Number(
-                              item.p
-                                .price ||
-                                0
-                            );
-
                       return (
                         <div
                           key={
@@ -1321,7 +1278,7 @@ export function Checkout() {
 
                                 <span className="font-semibold text-[color:var(--espresso)]">
                                   {
-                                    weightVal
+                                    item.weightVal
                                   }
                                   g
                                 </span>
@@ -1356,12 +1313,20 @@ export function Checkout() {
 
                           <div className="text-right shrink-0">
 
-                            <p className="font-bold text-base text-[color:var(--espresso)]">
-                              {formatINR(
-                                itemPrice *
-                                  item.qty
-                              )}
-                            </p>
+                            {item.discountTotal > 0 ? (
+                              <>
+                                <div className="text-xs text-[color:var(--muted-foreground)] line-through">
+                                  {formatINR(item.originalTotal)}
+                                </div>
+                                <div className="font-serif font-bold text-green-700">
+                                  {formatINR(item.finalTotal)}
+                                </div>
+                              </>
+                            ) : (
+                              <p className="font-bold text-base text-[color:var(--espresso)]">
+                                {formatINR(item.originalTotal)}
+                              </p>
+                            )}
 
                           </div>
 
@@ -1707,34 +1672,8 @@ export function Checkout() {
 
               <div className="space-y-3 text-sm divide-y divide-[color:var(--border)]/60">
 
-                {items.map(
+                {calculatedItems.map(
                   (item) => {
-                    const weightVal =
-                      Number(
-                        item.p
-                          .weight ??
-                          item.p
-                            .grossWeight ??
-                          0
-                      );
-
-                    const breakdown =
-                      computeBreakdown(
-                        weightVal,
-                        item.p
-                          .purity ||
-                          "22K"
-                      );
-
-                    const itemPrice =
-                      breakdown?.total
-                        ? breakdown.total
-                        : Number(
-                            item.p
-                              .price ||
-                              0
-                          );
-
                     return (
                       <div
                         key={
@@ -1755,7 +1694,7 @@ export function Checkout() {
                           <p className="text-xs text-[color:var(--muted-foreground)]">
 
                             {
-                              weightVal
+                              item.weightVal
                             }g ·{" "}
 
                             {
@@ -1774,12 +1713,22 @@ export function Checkout() {
 
                         </div>
 
-                        <span className="font-semibold shrink-0">
-                          {formatINR(
-                            itemPrice *
-                              item.qty
+                        <div className="text-right shrink-0">
+                          {item.discountTotal > 0 ? (
+                            <>
+                              <div className="text-xs text-[color:var(--muted-foreground)] line-through">
+                                {formatINR(item.originalTotal)}
+                              </div>
+                              <div className="font-semibold text-green-700">
+                                {formatINR(item.finalTotal)}
+                              </div>
+                            </>
+                          ) : (
+                            <span className="font-semibold">
+                              {formatINR(item.originalTotal)}
+                            </span>
                           )}
-                        </span>
+                        </div>
 
                       </div>
                     );
@@ -1833,99 +1782,59 @@ export function Checkout() {
                     </span>
                   </div>
 
-                {customerDiscount &&
-                  customerDiscountAmount >
-                    0 && (
-                    <div className="mt-3 rounded-xl border border-[color:var(--gold)]/30 bg-[color:var(--cream)]/40 p-3">
+                {/* Customer Discount */}
+                {customerDiscount && customerDiscountAmount > 0 && (
+                  <div className="flex justify-between text-sm pt-1">
+                    <span className="text-[color:var(--muted-foreground)]">
+                      {customerDiscount.name || "Customer Discount"}
+                    </span>
+                    <span className="text-green-700 font-medium">
+                      -{formatINR(customerDiscountAmount)}
+                    </span>
+                  </div>
+                )}
 
-                      <div className="flex items-center justify-between gap-3">
+                {/* Cart Coupon Discount */}
+                {appliedCoupon && cartCouponAmount > 0 && (
+                  <div className="flex justify-between text-sm pt-1">
+                    <span className="text-[color:var(--muted-foreground)]">
+                      {appliedCoupon.name || "Coupon Discount"}
+                    </span>
+                    <span className="text-green-700 font-medium">
+                      -{formatINR(cartCouponAmount)}
+                    </span>
+                  </div>
+                )}
 
-                        <div>
+                {/* Product / Seasonal Discount */}
+                {productDiscountTotal > 0 && (
+                  <div className="flex justify-between text-sm pt-1">
+                    <span className="text-[color:var(--muted-foreground)]">
+                      Offers & Discounts
+                    </span>
+                    <span className="text-green-700 font-medium">
+                      -{formatINR(productDiscountTotal)}
+                    </span>
+                  </div>
+                )}
 
-                          <p className="text-xs font-semibold text-[color:var(--gold-dark)]">
-                            Your Special Discount
-                          </p>
-
-                          <p className="text-xs text-[color:var(--muted-foreground)] mt-0.5">
-                            {
-                              customerDiscount.name ||
-                              "Customer Discount"
-                            }
-                          </p>
-
-                        </div>
-
-                        <span className="text-sm font-bold text-green-700 whitespace-nowrap">
-
-                          {customerDiscount.kind ===
-                          "percent"
-                            ? `${customerDiscount.value}% OFF`
-                            : `${formatINR(
-                                Number(
-                                  customerDiscount.value
-                                )
-                              )} OFF`}
-
-                        </span>
-
-                      </div>
-
-                      <div className="flex justify-between text-sm mt-2">
-
-                        <span className="text-green-700">
-                          Customer discount
-                        </span>
-
-                        <span className="text-green-700 font-medium">
-                          -{formatINR(
-                            customerDiscountAmount
-                          )}
-                        </span>
-
-                      </div>
-
-                      <p className="text-[10px] text-[color:var(--muted-foreground)] mt-1">
-                        Applied to making / VA charges.
-                      </p>
-
-                    </div>
-                  )}
-
-                {/* =======================================
-                    COUPON DISCOUNT
-                ======================================= */}
-
-                {appliedCoupon &&
-                  backendDiscount >
-                    customerDiscountAmount &&
-                  backendTotal !== null && (
-                    <div className="flex justify-between text-sm mt-2">
-                      <div>
-                        <span className="text-green-700">
-                          Coupon Discount
-                        </span>
-                        <p className="text-[10px] text-[color:var(--muted-foreground)] mt-0.5">
-                          {appliedCoupon}
-                        </p>
-                      </div>
-
-                      <span className="text-green-700 font-medium">
-                        -{formatINR(
-                          Math.max(
-                            backendDiscount -
-                              customerDiscountAmount,
-                            0
-                          )
-                        )}
-                      </span>
-                    </div>
-                  )}
+                {/* Backend Discount Override (if returned after initiation) */}
+                {backendDiscount !== null && backendDiscount > 0 && (
+                  <div className="flex justify-between text-sm pt-1 border-t border-[color:var(--border)] mt-2">
+                    <span className="text-green-700 font-medium">
+                      Total Savings Applied
+                    </span>
+                    <span className="text-green-700 font-bold">
+                      -{formatINR(backendDiscount)}
+                    </span>
+                  </div>
+                )}
 
                 {/* =======================================
                     TOTAL
                 ======================================= */}
 
-                <div className="flex justify-between font-bold text-lg text-[color:var(--espresso)] pt-3">
+                <div className="flex justify-between font-bold text-lg text-[color:var(--espresso)] pt-3 border-t border-[color:var(--border)] mt-2">
 
                   <span>
                     Total Payable
@@ -1964,7 +1873,7 @@ export function Checkout() {
                         Coupon Applied
                       </p>
                       <p className="text-xs text-[color:var(--muted-foreground)] mt-0.5">
-                        {appliedCoupon}
+                        {appliedCoupon.code}
                       </p>
                     </div>
                     <span className="text-xs font-semibold text-green-700">
