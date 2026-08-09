@@ -39,6 +39,9 @@ const {
 
 const app = express();
 
+// Disable x-powered-by header
+app.disable("x-powered-by");
+
 // ============================================================
 // ALLOWED ORIGINS
 // ============================================================
@@ -51,55 +54,38 @@ const allowedOrigins = [
 ];
 
 // ============================================================
-// CORS
-// ============================================================
-//
-// Explicit manual CORS handling is kept first because the
-// backend is also deployed on Vercel serverless.
+// CORS MIDDLEWARE
 // ============================================================
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin) return callback(null, true);
 
-  const isAllowed =
-    !origin ||
-    allowedOrigins.includes(origin) ||
-    (process.env.CLIENT_URL &&
-      origin === process.env.CLIENT_URL) ||
-    origin.endsWith(".vercel.app");
+      const isAllowed =
+        allowedOrigins.includes(origin) ||
+        (process.env.CLIENT_URL && origin === process.env.CLIENT_URL) ||
+        origin.endsWith(".vercel.app");
 
-  if (isAllowed && origin) {
-    res.setHeader(
-      "Access-Control-Allow-Origin",
-      origin
-    );
-  }
+      if (isAllowed) {
+        return callback(null, true);
+      } else {
+        return callback(null, false);
+      }
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+      "Accept",
+    ],
+  })
+);
 
-  res.setHeader(
-    "Access-Control-Allow-Credentials",
-    "true"
-  );
-
-  res.setHeader(
-    "Access-Control-Allow-Methods",
-    "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-  );
-
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, X-Requested-With, Accept"
-  );
-
-  // ----------------------------------------------------------
-  // OPTIONS PREFLIGHT
-  // ----------------------------------------------------------
-
-  if (req.method === "OPTIONS") {
-    return res.status(204).end();
-  }
-
-  next();
-});
+// Handle OPTIONS preflight explicit response
+app.options("*", cors());
 
 // ============================================================
 // HELMET
@@ -107,9 +93,8 @@ app.use((req, res, next) => {
 
 app.use(
   helmet({
-    crossOriginResourcePolicy: {
-      policy: "cross-origin",
-    },
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    crossOriginOpenerPolicy: false,
   })
 );
 
@@ -154,89 +139,27 @@ app.get("/api/health", (req, res) => {
 // PUBLIC API ROUTES
 // ============================================================
 
-app.use(
-  "/api/auth",
-  authRoutes
-);
-
-app.use(
-  "/api/products",
-  productRoutes
-);
-
-app.use(
-  "/api/categories",
-  categoryRoutes
-);
-
-app.use(
-  "/api/rates",
-  ratesRoutes
-);
-
-app.use(
-  "/api/reels",
-  reelRoutes
-);
+app.use("/api/auth", authRoutes);
+app.use("/api/products", productRoutes);
+app.use("/api/categories", categoryRoutes);
+app.use("/api/rates", ratesRoutes);
+app.use("/api/reels", reelRoutes);
 
 // ============================================================
 // PROTECTED API ROUTES
 // ============================================================
 
-app.use(
-  "/api/addresses",
-  protect,
-  addressRoutes
-);
-
-app.use(
-  "/api/wishlist",
-  protect,
-  wishlistRoutes
-);
-
-app.use(
-  "/api/cart",
-  protect,
-  cartRoutes
-);
-
-app.use(
-  "/api/shiprocket",
-  protect,
-  shiprocketRoutes
-);
-
-app.use(
-  "/api/orders",
-  protect,
-  orderRoutes
-);
+app.use("/api/addresses", protect, addressRoutes);
+app.use("/api/wishlist", protect, wishlistRoutes);
+app.use("/api/cart", protect, cartRoutes);
+app.use("/api/shiprocket", protect, shiprocketRoutes);
+app.use("/api/orders", protect, orderRoutes);
 
 // ============================================================
 // DISCOUNTS
 // ============================================================
-//
-// IMPORTANT:
-//
-// /api/discounts/available needs req.user because the
-// customer discount controller checks:
-//
-//     req.user?.id
-//
-// Therefore the protect middleware MUST run before the
-// customer discount routes.
-//
-// This allows the backend to identify the logged-in customer
-// and return only the CUSTOMER discount assigned to them.
-//
-// ============================================================
 
-app.use(
-  "/api/discounts",
-  protect,
-  customerDiscountRoutes
-);
+app.use("/api/discounts", protect, customerDiscountRoutes);
 
 // ============================================================
 // 404 HANDLER
@@ -253,10 +176,6 @@ app.use(errorHandler);
 // ============================================================
 // LOCAL DATABASE CONNECTION
 // ============================================================
-//
-// Vercel manages the serverless process itself.
-// Local development starts the Express server here.
-// ============================================================
 
 if (process.env.VERCEL !== "1") {
   const PORT = process.env.PORT || 5000;
@@ -264,21 +183,14 @@ if (process.env.VERCEL !== "1") {
   prisma
     .$connect()
     .then(() => {
-      console.log(
-        "✅ PostgreSQL connected via Prisma"
-      );
+      console.log("✅ PostgreSQL connected via Prisma");
 
       app.listen(PORT, () => {
-        console.log(
-          `🚀 Server running on port ${PORT}`
-        );
+        console.log(`🚀 Server running on port ${PORT}`);
       });
     })
     .catch((err) => {
-      console.error(
-        "❌ DB connection failed:",
-        err.message
-      );
+      console.error("❌ DB connection failed:", err.message);
     });
 }
 
