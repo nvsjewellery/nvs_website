@@ -29,6 +29,10 @@ interface ApiResponse<T = unknown> {
   message?: string;
   token?: string;
 
+  // Forgot / Reset Password response
+  resetToken?: string;
+  resetUrl?: string;
+
   user?: T;
   data?: T;
 
@@ -97,13 +101,7 @@ export interface ProductItem {
   desc?: string;
   details?: string;
 
-  /*
-   * VA / making charge.
-   *
-   * Discounts are applied ONLY to this amount.
-   */
   va?: number;
-
   making?: number;
 
   metalValue?: number;
@@ -152,34 +150,10 @@ export type DiscountKind =
   | "percent"
   | "flat";
 
-/*
- * Product reference returned by backend
- * for product-specific discounts.
- */
 export interface DiscountProduct {
   id: string;
 }
 
-/*
- * Customer-side discount structure.
- *
- * IMPORTANT:
- *
- * Seasonal PRODUCT discount:
- *   products = [{ id: "..." }]
- *
- * Seasonal CATEGORY discount:
- *   category = "Earrings"
- *
- * Coupon PRODUCT discount:
- *   products = [{ id: "..." }]
- *
- * Coupon CART discount:
- *   target = "CART"
- *
- * Customer discount:
- *   target = "CUSTOMER"
- */
 export interface Discount {
   id: string;
 
@@ -187,53 +161,13 @@ export interface Discount {
   code?: string | null;
 
   type: DiscountType;
-
   target: DiscountTarget;
-
   kind: DiscountKind;
-
-  /*
-   * Discount value.
-   *
-   * percent:
-   *   10 = 10%
-   *
-   * flat:
-   *   500 = ₹500
-   *
-   * IMPORTANT:
-   * Backend applies this ONLY against VA /
-   * making charges.
-   */
   value: number;
 
-  /*
-   * Optional metal restriction.
-   */
   metal?: "Gold" | "Silver" | null;
-
-  /*
-   * Category-specific discount.
-   */
   category?: string | null;
-
-  /*
-   * Product-specific discount.
-   *
-   * Backend returns:
-   *
-   * products: [
-   *   { id: "product-id" }
-   * ]
-   */
   products?: DiscountProduct[];
-
-  /*
-   * Customer-specific discount.
-   *
-   * The backend may return this for
-   * available customer discounts.
-   */
   userId?: string | null;
 
   startDate?: string | null;
@@ -318,10 +252,6 @@ export const api = {
     });
   },
 
-  // ----------------------------------------------------------
-  // REGISTER
-  // ----------------------------------------------------------
-
   async register(
     name: string,
     email: string,
@@ -347,10 +277,6 @@ export const api = {
     return res;
   },
 
-  // ----------------------------------------------------------
-  // LOGIN
-  // ----------------------------------------------------------
-
   async login(
     email: string,
     password: string
@@ -374,9 +300,25 @@ export const api = {
     return res;
   },
 
-  // ----------------------------------------------------------
-  // LOGOUT
-  // ----------------------------------------------------------
+  async forgotPassword(email: string) {
+    return request("/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  async resetPassword(token: string, password: string) {
+    const res = await request<User>("/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ token, password }),
+    });
+
+    if (res.token) {
+      saveToken(res.token);
+    }
+
+    return res;
+  },
 
   async logout() {
     try {
@@ -392,19 +334,11 @@ export const api = {
     };
   },
 
-  // ----------------------------------------------------------
-  // GET CURRENT USER
-  // ----------------------------------------------------------
-
   getMe() {
     return request<User>("/auth/me", {
       method: "GET",
     });
   },
-
-  // ----------------------------------------------------------
-  // UPDATE PROFILE
-  // ----------------------------------------------------------
 
   updateProfile(data: {
     phone?: string;
@@ -727,10 +661,6 @@ export const categoriesApi = {
 // ============================================================
 
 export const discountsApi = {
-  // ----------------------------------------------------------
-  // GET DISCOUNTS AVAILABLE TO CURRENT CUSTOMER
-  // ----------------------------------------------------------
-
   async getAvailable(): Promise<Discount[]> {
     const res =
       await request<Discount[]>(
@@ -742,10 +672,6 @@ export const discountsApi = {
 
     return res.discounts ?? [];
   },
-
-  // ----------------------------------------------------------
-  // VALIDATE COUPON
-  // ----------------------------------------------------------
 
   async validateCoupon(
     code: string

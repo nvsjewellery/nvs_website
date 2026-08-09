@@ -7,6 +7,8 @@ const {
   logoutUser,
   getMe,
   updateProfile,
+  forgotPassword,
+  resetPassword,
 } = require("../controllers/authController");
 const { protect } = require("../middleware/authMiddleware");
 
@@ -43,5 +45,24 @@ router.post(
 router.post("/logout", logoutUser);
 router.get("/me", protect, getMe);
 router.patch("/profile", protect, updateProfile);
+
+router.post(
+  "/forgot-password",
+  authLimiter,
+  [body("email").isEmail().withMessage("Valid email required")],
+  forgotPassword
+);
+
+router.post(
+  "/reset-password",
+  authLimiter,
+  [
+    body("token").notEmpty().withMessage("Token is required"),
+    body("password")
+      .isLength({ min: 8 })
+      .withMessage("Password must be at least 8 characters"),
+  ],
+  resetPassword
+);
 
 module.exports = router;

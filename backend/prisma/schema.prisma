@@ -18,6 +18,10 @@ model User {
   password String
   phone    String?
 
+  // 👇 FORGOT / RESET PASSWORD TOKEN FIELDS
+  resetPasswordToken  String?
+  resetPasswordExpire DateTime?
+
   orders    Order[]
   addresses Address[]
   wishlist  Wishlist[]
@@ -175,109 +179,27 @@ model Category {
 model Discount {
   id String @id @default(cuid())
 
-  // ----------------------------------------------------------
-  // DISCOUNT TYPE
-  // ----------------------------------------------------------
-  //
-  // SEASONAL
-  //   Festive / promotional discount.
-  //
-  // COUPON
-  //   Customer enters a coupon code during checkout.
-  //
-  // CUSTOMER
-  //   Discount specifically assigned to one customer.
-  //
   type DiscountType
-
-  // ----------------------------------------------------------
-  // DISCOUNT TARGET
-  // ----------------------------------------------------------
-  //
-  // PRODUCT
-  //   Specific products.
-  //
-  // CATEGORY
-  //   All products belonging to a category.
-  //
-  // CART
-  //   Any eligible product in the customer's cart.
-  //
-  // CUSTOMER
-  //   Specific customer's eligible products.
-  //
   target DiscountTarget
-
-  // ----------------------------------------------------------
-  // DISCOUNT VALUE
-  // ----------------------------------------------------------
-  //
-  // percent
-  //   Example: 10 = 10%
-  //
-  // flat
-  //   Example: 500 = ₹500
-  //
-  // IMPORTANT:
-  // The backend will ALWAYS apply this value ONLY to VA.
-  //
   kind  DiscountKind
   value Float
 
-  // ----------------------------------------------------------
-  // ADMIN-FRIENDLY NAME
-  // ----------------------------------------------------------
-
   name String?
-
-  // ----------------------------------------------------------
-  // COUPON CODE
-  // ----------------------------------------------------------
-  //
-  // Used only for coupon-type discounts.
-  //
-  // Example:
-  // NVS10
-  // DIWALI25
-  //
   code String? @unique
-
-  // ----------------------------------------------------------
-  // PRODUCT / CATEGORY TARGETING
-  // ----------------------------------------------------------
 
   metal    Metal?
   category String?
 
-  // Specific products targeted by this discount
   products Product[] @relation("DiscountProducts")
 
-  // ----------------------------------------------------------
-  // CUSTOMER TARGETING
-  // ----------------------------------------------------------
-  //
-  // Used for customer-specific discounts.
-  //
   userId String?
   user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  // ----------------------------------------------------------
-  // VALIDITY
-  // ----------------------------------------------------------
 
   startDate DateTime?
   endDate   DateTime?
 
-  // ----------------------------------------------------------
-  // COUPON USAGE
-  // ----------------------------------------------------------
-
   usageLimit Int?
   usageCount Int  @default(0)
-
-  // ----------------------------------------------------------
-  // ACTIVE / INACTIVE
-  // ----------------------------------------------------------
 
   isActive Boolean @default(true)
 
@@ -321,10 +243,6 @@ model Order {
 
   items OrderItem[]
 
-  // ----------------------------------------------------------
-  // CUSTOMER / SHIPPING SNAPSHOT
-  // ----------------------------------------------------------
-
   customerName     String
   customerLastName String @default("NA")
   customerEmail    String
@@ -335,52 +253,19 @@ model Order {
   state   String
   pincode String
 
-  // ----------------------------------------------------------
-  // RAZORPAY
-  // ----------------------------------------------------------
-
   razorpayOrderId   String?
   razorpayPaymentId String?
 
-  // ----------------------------------------------------------
-  // ORDER PRICE
-  // ----------------------------------------------------------
-
-  // Price before discount
   subTotal Float
-
-  // Amount saved through discount.
-  //
-  // IMPORTANT:
-  // This will always represent discount applied ONLY to VA.
-  //
   discountAmount Float @default(0)
-
-  // Coupon code used by customer, if any.
   discountCode String?
-
-  // Discount type used for this order, if any.
   discountType DiscountType?
-
-  // Final amount paid by customer.
   total Float
-
-  // ----------------------------------------------------------
-  // PAYMENT
-  // ----------------------------------------------------------
 
   paymentMethod PaymentMethod @default(Prepaid)
   paymentStatus PaymentStatus @default(Pending)
 
-  // ----------------------------------------------------------
-  // ORDER STATUS
-  // ----------------------------------------------------------
-
   status OrderStatus @default(Placed)
-
-  // ----------------------------------------------------------
-  // SHIPROCKET
-  // ----------------------------------------------------------
 
   srOrderId     String?
   srShipmentId  String?
@@ -415,8 +300,6 @@ model OrderItem {
 
   qty Int
 
-  // Final selling price of one item after the
-  // applicable VA-only discount.
   sellingPrice Float
 
   @@map("order_items")
@@ -437,51 +320,23 @@ enum ProductStatus {
   Draft
 }
 
-// ============================================================
-// DISCOUNT TYPE
-// ============================================================
-
 enum DiscountType {
-  // Festive / seasonal discount
   SEASONAL
-
-  // Coupon entered by customer
   COUPON
-
-  // Personally assigned to a customer
   CUSTOMER
 }
-
-// ============================================================
-// DISCOUNT TARGET
-// ============================================================
 
 enum DiscountTarget {
-  // Selected products
   PRODUCT
-
-  // Entire category
   CATEGORY
-
-  // Eligible products throughout cart
   CART
-
-  // Specific customer
   CUSTOMER
 }
-
-// ============================================================
-// DISCOUNT KIND
-// ============================================================
 
 enum DiscountKind {
   percent
   flat
 }
-
-// ============================================================
-// PAYMENT
-// ============================================================
 
 enum PaymentMethod {
   Prepaid
@@ -494,10 +349,6 @@ enum PaymentStatus {
   Failed
   Refunded
 }
-
-// ============================================================
-// ORDER STATUS
-// ============================================================
 
 enum OrderStatus {
   Placed

@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const asyncHandler = require("express-async-handler");
 const bcrypt = require("bcryptjs");
 const { validationResult } = require("express-validator");
@@ -156,10 +157,128 @@ const updateProfile = asyncHandler(async (req, res) => {
   });
 });
 
+//
+// FORGOT PASSWORD
+//
+const forgotPassword = asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+
+  if (!errors.isEmpty()) {
+    res.status(400);
+    throw new Error(errors.array()[0].msg);
+  }
+
+  const { email } = req.body;
+  const normalizedEmail = email.toLowerCase().trim();
+
+  const user = await prisma.user.findUnique({
+    where: {
+      email: normalizedEmail,
+    },
+  });
+
+  if (!user) {
+    res.status(404);
+    throw new Error("No account found with that email address");
+  }
+
+  const resetToken = crypto.randomBytes(32).toString("hex");
+
+  const hashedToken = crypto
+    .createHash("sha256")
+    .update(resetToken)
+    .digest("hex");
+
+  const resetExpire = new Date(Date.now() + 15 * 60 * 1000);
+
+  await prisma.user.update({
+    where: {
+      id: user.id,
+    },
+    data: {
+      resetPasswordToken: hashedToken,
+      resetPasswordExpire: resetExpire,
+    },
+  });
+
+  const clientUrl = process.env.CLIENT_URL || "https://nvsjewellery.com";
+  const resetUrl = `${clientUrl}/reset-password?token=${resetToken}`;
+
+  res.status(200).json({
+    success: true,
+    message: "Password reset token generated successfully",
+    resetToken,
+    resetUrl,
+  });
+});
+
+//
+// RESET PASSWORD
+//
+const resetPassword = asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+
+  if (!errors.isEmpty()) {
+    res.status(400);
+    throw new Error(errors.array()[0].msg);
+  }
+
+  const { token, password } = req.body;
+
+  const hashedToken = crypto
+    .createHash("sha256")
+    .update(token)
+    .digest("hex");
+
+  const user = await prisma.user.findFirst({
+    where: {
+      resetPasswordToken: hashedToken,
+      resetPasswordExpire: {
+        gt: new Date(),
+      },
+    },
+  });
+
+  if (!user) {
+    res.status(400);
+    throw new Error("Invalid or expired password reset token");
+  }
+
+  const salt = await bcrypt.genSalt(12);
+  const hashedPassword = await bcrypt.hash(password, salt);
+
+  await prisma.user.update({
+    where: {
+      id: user.id,
+    },
+    data: {
+      password: hashedPassword,
+      resetPasswordToken: null,
+      resetPasswordExpire: null,
+    },
+  });
+
+  const authToken = generateToken(user.id);
+
+  res.status(200).json({
+    success: true,
+    message: "Password reset successful",
+    token: authToken,
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+    },
+  });
+});
+
 module.exports = {
   registerUser,
   loginUser,
   logoutUser,
   getMe,
   updateProfile,
+  forgotPassword,
+  resetPassword,
 };

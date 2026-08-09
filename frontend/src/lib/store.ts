@@ -163,6 +163,20 @@ export const actions = {
     emit();
   },
 
+  async resetPassword(token: string, password: string) {
+    const res = await api.resetPassword(token, password);
+
+    if (!res.user) return;
+
+    state.user = res.user;
+    state.authChecked = true;
+
+    state.cart = await cartApi.getAll();
+    state.wishlist = await wishlistApi.getAll();
+
+    emit();
+  },
+
   async signOut() {
     try {
       await api.logout();
@@ -211,6 +225,7 @@ export const actions = {
 if (typeof window !== "undefined") {
   actions.checkAuth();
 }
+
 export let LIVE_RATES: Record<string, number> = {
   "24K": 14493,
   "22K": 13285,
