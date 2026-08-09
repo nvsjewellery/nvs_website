@@ -6,43 +6,71 @@ const {
   isDiscountCurrentlyValid,
 } = require("../services/discountService");
 
-/* =========================================================
-   GET AVAILABLE DISCOUNTS
-   =========================================================
-
-   GET /api/discounts/available
-
-   Returns discounts currently available to the
-   logged-in customer.
-
-   SEASONAL:
-   - Available to everyone.
-   - Includes CATEGORY and PRODUCT discounts.
-
-   CUSTOMER:
-   - Only returned when assigned to the logged-in user.
-
-   COUPON:
-   - NOT returned here.
-   - Customer must enter the coupon code manually.
-========================================================= */
+/*
+|--------------------------------------------------------------------------
+| GET AVAILABLE DISCOUNTS
+|--------------------------------------------------------------------------
+|
+| GET /api/discounts/available
+|
+| Returns discounts currently available to the customer.
+|
+| SEASONAL:
+|   Available to everyone.
+|   Includes PRODUCT and CATEGORY discounts.
+|
+| CUSTOMER:
+|   Returned only when assigned to the logged-in customer.
+|
+| COUPON:
+|   NOT returned here.
+|   Customer must manually enter the coupon code.
+|
+|--------------------------------------------------------------------------
+*/
 
 const getAvailableDiscounts = asyncHandler(
   async (req, res) => {
-    const userId = req.user.id;
+    /*
+    |--------------------------------------------------------------------------
+    | CUSTOMER ID
+    |--------------------------------------------------------------------------
+    |
+    | Seasonal discounts are public.
+    |
+    | Therefore this endpoint should not crash if req.user
+    | is unavailable.
+    |
+    */
+
+    const userId = req.user?.id || null;
 
     const now = new Date();
+
+    /*
+    |--------------------------------------------------------------------------
+    | BUILD DISCOUNT QUERY
+    |--------------------------------------------------------------------------
+    */
 
     const discounts =
       await prisma.discount.findMany({
         where: {
+          /*
+          |--------------------------------------------------------------------------
+          | ACTIVE
+          |--------------------------------------------------------------------------
+          */
+
           isActive: true,
 
-          AND: [
-            /* -----------------------------------------
-               START DATE
-            ----------------------------------------- */
+          /*
+          |--------------------------------------------------------------------------
+          | DATE VALIDITY
+          |--------------------------------------------------------------------------
+          */
 
+          AND: [
             {
               OR: [
                 {
@@ -55,10 +83,6 @@ const getAvailableDiscounts = asyncHandler(
                 },
               ],
             },
-
-            /* -----------------------------------------
-               END DATE
-            ----------------------------------------- */
 
             {
               OR: [
@@ -73,37 +97,50 @@ const getAvailableDiscounts = asyncHandler(
               ],
             },
 
-            /* -----------------------------------------
-               CUSTOMER VISIBILITY
-            -----------------------------------------
-
-               SEASONAL:
-                 Everyone can see.
-
-               CUSTOMER:
-                 Only assigned customer.
-
-               COUPON:
-                 Not automatically returned.
-            ----------------------------------------- */
+            /*
+            |--------------------------------------------------------------------------
+            | CUSTOMER VISIBILITY
+            |--------------------------------------------------------------------------
+            |
+            | SEASONAL:
+            |   Everyone can receive it.
+            |
+            | CUSTOMER:
+            |   Only the assigned customer.
+            |
+            | COUPON:
+            |   Never automatically returned.
+            |
+            */
 
             {
               OR: [
                 {
                   type: "SEASONAL",
                 },
-                {
-                  type: "CUSTOMER",
-                  userId,
-                },
+
+                /*
+                 * Only include CUSTOMER discounts when
+                 * a logged-in customer exists.
+                 */
+                ...(userId
+                  ? [
+                      {
+                        type: "CUSTOMER",
+                        userId,
+                      },
+                    ]
+                  : []),
               ],
             },
           ],
         },
 
-        /* ---------------------------------------------
-           RETURN ONLY DATA CUSTOMER NEEDS
-        --------------------------------------------- */
+        /*
+        |--------------------------------------------------------------------------
+        | RETURN CUSTOMER-SAFE DATA
+        |--------------------------------------------------------------------------
+        */
 
         select: {
           id: true,
@@ -118,25 +155,39 @@ const getAvailableDiscounts = asyncHandler(
 
           value: true,
 
-          /* -----------------------------------------
-             TARGET INFORMATION
-          ----------------------------------------- */
+          /*
+          |--------------------------------------------------------------------------
+          | IMPORTANT FIX
+          |--------------------------------------------------------------------------
+          |
+          | isDiscountCurrentlyValid() checks isActive.
+          |
+          | Previously this field was missing from SELECT,
+          | which caused:
+          |
+          | discount.isActive === undefined
+          |
+          | and therefore every discount was considered invalid.
+          |
+          */
+
+          isActive: true,
+
+          /*
+          |--------------------------------------------------------------------------
+          | TARGET RESTRICTIONS
+          |--------------------------------------------------------------------------
+          */
 
           metal: true,
 
           category: true,
 
-          /* -----------------------------------------
-             PRODUCT-SPECIFIC DISCOUNT
-
-             Example:
-
-             target = PRODUCT
-
-             products = [
-               { id: "product123" }
-             ]
-          ----------------------------------------- */
+          /*
+          |--------------------------------------------------------------------------
+          | PRODUCT TARGET
+          |--------------------------------------------------------------------------
+          */
 
           products: {
             select: {
@@ -144,26 +195,29 @@ const getAvailableDiscounts = asyncHandler(
             },
           },
 
-          /* -----------------------------------------
-             CUSTOMER-SPECIFIC DISCOUNT
-
-             We only expose the ID because the
-             discount was already filtered using it.
-          ----------------------------------------- */
+          /*
+          |--------------------------------------------------------------------------
+          | CUSTOMER TARGET
+          |--------------------------------------------------------------------------
+          */
 
           userId: true,
 
-          /* -----------------------------------------
-             VALIDITY
-          ----------------------------------------- */
+          /*
+          |--------------------------------------------------------------------------
+          | VALIDITY
+          |--------------------------------------------------------------------------
+          */
 
           startDate: true,
 
           endDate: true,
 
-          /* -----------------------------------------
-             USAGE
-          ----------------------------------------- */
+          /*
+          |--------------------------------------------------------------------------
+          | USAGE
+          |--------------------------------------------------------------------------
+          */
 
           usageLimit: true,
 
@@ -175,95 +229,155 @@ const getAvailableDiscounts = asyncHandler(
         },
       });
 
-    /* ---------------------------------------------
-       FINAL VALIDITY CHECK
-    --------------------------------------------- */
+    /*
+    |--------------------------------------------------------------------------
+    | FINAL VALIDITY CHECK
+    |--------------------------------------------------------------------------
+    |
+    | Prisma already checks:
+    |   - active
+    |   - start date
+    |   - end date
+    |
+    | We still run the common validation helper so the
+    | customer endpoint follows the same rules as the
+    | rest of the backend.
+    |
+    */
 
     const validDiscounts =
       discounts.filter(
         isDiscountCurrentlyValid
       );
 
-    /* ---------------------------------------------
-       RESPONSE
-    --------------------------------------------- */
+    /*
+    |--------------------------------------------------------------------------
+    | RESPONSE
+    |--------------------------------------------------------------------------
+    */
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
+
       discounts: validDiscounts,
     });
   }
 );
 
-/* =========================================================
-   VALIDATE COUPON
-   =========================================================
-
-   POST /api/discounts/validate-coupon
-
-   Body:
-
-   {
-     "code": "NVS10"
-   }
-
-   Coupon is NOT automatically applied.
-
-   Customer explicitly enters the code.
-
-   Backend checks:
-
-   1. Code exists
-   2. Type is COUPON
-   3. Active
-   4. Start date
-   5. End date
-   6. Usage limit
-========================================================= */
+/*
+|--------------------------------------------------------------------------
+| POST /api/discounts/validate-coupon
+|--------------------------------------------------------------------------
+|
+| Customer manually enters a coupon code.
+|
+| Body:
+|
+| {
+|   "code": "NVS10"
+| }
+|
+| Backend validates:
+|
+| 1. Code exists
+| 2. Type is COUPON
+| 3. Active
+| 4. Start date
+| 5. End date
+| 6. Usage limit
+|
+|--------------------------------------------------------------------------
+*/
 
 const validateCoupon = asyncHandler(
   async (req, res) => {
-    const { code } = req.body;
+    const { code } = req.body || {};
 
-    /* ---------------------------------------------
-       REQUIRED CODE
-    --------------------------------------------- */
+    /*
+    |--------------------------------------------------------------------------
+    | REQUIRED CODE
+    |--------------------------------------------------------------------------
+    */
 
     if (
       !code ||
       !String(code).trim()
     ) {
-      res.status(400);
-
-      throw new Error(
-        "Please enter a coupon code"
-      );
+      return res.status(400).json({
+        success: false,
+        message:
+          "Please enter a coupon code",
+      });
     }
 
-    /* ---------------------------------------------
-       FIND COUPON
-    --------------------------------------------- */
+    /*
+    |--------------------------------------------------------------------------
+    | FIND + VALIDATE COUPON
+    |--------------------------------------------------------------------------
+    |
+    | getCouponByCode() already:
+    |
+    | - normalizes the code
+    | - searches Prisma
+    | - checks type === COUPON
+    | - checks active status
+    | - checks dates
+    | - checks usage limit
+    |
+    */
 
     const discount =
       await getCouponByCode(code);
 
-    /* ---------------------------------------------
-       INVALID / EXPIRED COUPON
-    --------------------------------------------- */
+    /*
+    |--------------------------------------------------------------------------
+    | INVALID / EXPIRED COUPON
+    |--------------------------------------------------------------------------
+    */
 
     if (!discount) {
-      res.status(404);
-
-      throw new Error(
-        "Invalid or expired coupon code"
-      );
+      return res.status(404).json({
+        success: false,
+        message:
+          "Invalid or expired coupon code",
+      });
     }
 
-    /* ---------------------------------------------
-       RESPONSE
-    --------------------------------------------- */
+    /*
+    |--------------------------------------------------------------------------
+    | EXTRA SAFETY
+    |--------------------------------------------------------------------------
+    */
 
-    res.status(200).json({
+    if (
+      discount.type !== "COUPON"
+    ) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Invalid or expired coupon code",
+      });
+    }
+
+    if (
+      !isDiscountCurrentlyValid(
+        discount
+      )
+    ) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Invalid or expired coupon code",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | RESPONSE
+    |--------------------------------------------------------------------------
+    */
+
+    return res.status(200).json({
       success: true,
 
       coupon: {
@@ -281,33 +395,39 @@ const validateCoupon = asyncHandler(
 
         value: discount.value,
 
+        /*
+        |--------------------------------------------------------------------------
+        | TARGET RESTRICTIONS
+        |--------------------------------------------------------------------------
+        */
+
         metal: discount.metal,
 
-        category: discount.category,
+        category:
+          discount.category,
 
-        /* -----------------------------------------
-           PRODUCT TARGET
-
-           This is important for product-specific
-           coupons.
-
-           Example:
-
-           products: [
-             { id: "abc123" }
-           ]
-        ----------------------------------------- */
+        /*
+        |--------------------------------------------------------------------------
+        | PRODUCT TARGET
+        |--------------------------------------------------------------------------
+        */
 
         products:
-          discount.products?.map(
-            (product) => ({
-              id: product.id,
-            })
-          ) ?? [],
+          Array.isArray(
+            discount.products
+          )
+            ? discount.products.map(
+                (product) => ({
+                  id: product.id,
+                })
+              )
+            : [],
 
-        /* -----------------------------------------
-           VALIDITY
-        ----------------------------------------- */
+        /*
+        |--------------------------------------------------------------------------
+        | VALIDITY
+        |--------------------------------------------------------------------------
+        */
 
         startDate:
           discount.startDate,
@@ -315,9 +435,11 @@ const validateCoupon = asyncHandler(
         endDate:
           discount.endDate,
 
-        /* -----------------------------------------
-           USAGE
-        ----------------------------------------- */
+        /*
+        |--------------------------------------------------------------------------
+        | USAGE
+        |--------------------------------------------------------------------------
+        */
 
         usageLimit:
           discount.usageLimit,
@@ -329,9 +451,11 @@ const validateCoupon = asyncHandler(
   }
 );
 
-/* =========================================================
-   EXPORTS
-========================================================= */
+/*
+|--------------------------------------------------------------------------
+| EXPORTS
+|--------------------------------------------------------------------------
+*/
 
 module.exports = {
   getAvailableDiscounts,
