@@ -1,6 +1,21 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { Heart, MapPin, Plus, Tag, Trash2 } from "lucide-react";
+import {
+  createFileRoute,
+  Link,
+  useNavigate,
+} from "@tanstack/react-router";
+
+import {
+  useEffect,
+  useState,
+} from "react";
+
+import {
+  Heart,
+  MapPin,
+  Plus,
+  Tag,
+  Trash2,
+} from "lucide-react";
 
 import { Layout } from "@/components/Layout";
 import { OrnamentalDivider } from "@/components/OrnamentalDivider";
@@ -29,9 +44,19 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-export const Route = createFileRoute("/account")({
+/* =========================================================
+   ROUTE
+========================================================= */
+
+export const Route = createFileRoute(
+  "/account"
+)({
   component: Account,
 });
+
+/* =========================================================
+   TYPES
+========================================================= */
 
 type WishlistPreviewItem = {
   id: string;
@@ -49,104 +74,280 @@ type Address = {
   isDefault?: boolean;
 };
 
+/* =========================================================
+   ACCOUNT CACHE
+========================================================= */
+
+const accountWishlistPreviewCache: Record<
+  string,
+  WishlistPreviewItem
+> = {};
+
+let accountAddressesCache:
+  | Address[]
+  | null = null;
+
+let accountAddressesPromise:
+  | Promise<Address[]>
+  | null = null;
+
+/* =========================================================
+   ACCOUNT
+========================================================= */
+
 export function Account() {
-  const user = useStore((s) => s.user);
-  const authChecked = useStore((s) => s.authChecked);
-  const wishlist = useStore((s) => s.wishlist);
+  const user = useStore(
+    (s) => s.user
+  );
+
+  const authChecked = useStore(
+    (s) => s.authChecked
+  );
+
+  const wishlist = useStore(
+    (s) => s.wishlist
+  );
 
   const nav = useNavigate();
 
-  const [previewItems, setPreviewItems] = useState<
+  const [
+    previewItems,
+    setPreviewItems,
+  ] = useState<
     WishlistPreviewItem[]
   >([]);
 
-  const [addresses, setAddresses] = useState<Address[]>([]);
-  const [showAddForm, setShowAddForm] = useState(false);
+  const [
+    addresses,
+    setAddresses,
+  ] = useState<Address[]>(
+    []
+  );
 
-  // Address form fields
-  const [label, setLabel] = useState("Home");
-  const [addressLine, setAddressLine] = useState("");
-  const [city, setCity] = useState("");
-  const [state, setState] = useState("");
-  const [pincode, setPincode] = useState("");
+  const [
+    showAddForm,
+    setShowAddForm,
+  ] = useState(false);
 
-  const wishlistKeys = wishlist.join(",");
+  /* =======================================================
+     ADDRESS FORM
+  ======================================================= */
 
-  /*
-   * Load wishlist preview
-   */
+  const [label, setLabel] =
+    useState("Home");
+
+  const [
+    addressLine,
+    setAddressLine,
+  ] = useState("");
+
+  const [city, setCity] =
+    useState("");
+
+  const [state, setState] =
+    useState("");
+
+  const [
+    pincode,
+    setPincode,
+  ] = useState("");
+
+  const wishlistKeys =
+    wishlist.join(",");
+
+  /* =======================================================
+     LOAD WISHLIST PREVIEW
+  ======================================================= */
+
   useEffect(() => {
-    if (wishlist.length === 0) {
+    if (
+      wishlist.length ===
+      0
+    ) {
       setPreviewItems([]);
       return;
     }
 
     let cancelled = false;
 
-    Promise.all(
-      wishlist
-        .slice(0, 3)
-        .map((id) =>
-          productsApi.getById(id).catch(() => null)
-        )
-    ).then((results) => {
-      if (cancelled) return;
+    async function loadWishlistPreview() {
+      const previewIds =
+        wishlist.slice(0, 3);
 
-      const items = results
-        .filter(
-          (p): p is NonNullable<typeof p> =>
-            p !== null
-        )
-        .map((p: any) => {
-          const weightVal = Number(
-            p.weight ??
-              p.grossWeight ??
-              0
+      /*
+       * Use cached preview
+       * products first.
+       */
+
+      const cached =
+        previewIds
+          .map(
+            (id) =>
+              accountWishlistPreviewCache[
+                id
+              ]
+          )
+          .filter(Boolean);
+
+      if (
+        cached.length ===
+        previewIds.length
+      ) {
+        setPreviewItems(
+          cached
+        );
+
+        return;
+      }
+
+      try {
+        const missingIds =
+          previewIds.filter(
+            (id) =>
+              !accountWishlistPreviewCache[
+                id
+              ]
           );
 
-          const bd = computeBreakdown(
-            weightVal,
-            p.purity || "22K"
+        const results =
+          await Promise.all(
+            missingIds.map(
+              (id) =>
+                productsApi
+                  .getById(id)
+                  .catch(
+                    () => null
+                  )
+            )
           );
 
-          const price = bd?.total
-            ? bd.total
-            : Number(p.price || 0);
+        results.forEach(
+          (p: any) => {
+            if (!p?.id) {
+              return;
+            }
 
-          return {
-            id: p.id,
-            name: p.name,
-            price,
-          };
-        });
+            const weightVal =
+              Number(
+                p.weight ??
+                  p.grossWeight ??
+                  0
+              );
 
-      setPreviewItems(items);
-    });
+            const bd =
+              computeBreakdown(
+                weightVal,
+                p.purity ||
+                  "22K"
+              );
+
+            const price =
+              bd?.total
+                ? bd.total
+                : Number(
+                    p.price ||
+                      0
+                  );
+
+            accountWishlistPreviewCache[
+              p.id
+            ] = {
+              id: p.id,
+              name: p.name,
+              price,
+            };
+          }
+        );
+
+        if (!cancelled) {
+          const finalItems =
+            previewIds
+              .map(
+                (id) =>
+                  accountWishlistPreviewCache[
+                    id
+                  ]
+              )
+              .filter(Boolean);
+
+          setPreviewItems(
+            finalItems
+          );
+        }
+      } catch (error) {
+        console.error(
+          "Failed to load wishlist preview:",
+          error
+        );
+      }
+    }
+
+    loadWishlistPreview();
 
     return () => {
       cancelled = true;
     };
   }, [wishlistKeys]);
 
-  /*
-   * Load saved addresses
-   */
+  /* =======================================================
+     LOAD SAVED ADDRESSES
+  ======================================================= */
+
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      return;
+    }
 
     let cancelled = false;
 
     async function loadAddresses() {
+      /*
+       * Return cached addresses immediately.
+       */
+
+      if (
+        accountAddressesCache
+      ) {
+        setAddresses(
+          accountAddressesCache
+        );
+
+        return;
+      }
+
+      /*
+       * Prevent duplicate address requests.
+       */
+
+      if (
+        !accountAddressesPromise
+      ) {
+        accountAddressesPromise =
+          addressesApi
+            .getAll()
+            .then((data) => {
+              accountAddressesCache =
+                data;
+
+              return data;
+            })
+            .finally(() => {
+              accountAddressesPromise =
+                null;
+            });
+      }
+
       try {
-        const data = await addressesApi.getAll();
+        const data =
+          await accountAddressesPromise;
 
         if (!cancelled) {
           setAddresses(data);
         }
-      } catch (err) {
+      } catch (error) {
         console.error(
           "Failed to load addresses:",
-          err
+          error
         );
       }
     }
@@ -158,84 +359,124 @@ export function Account() {
     };
   }, [user]);
 
-  /*
-   * Add new address
-   */
-  const handleAddAddress = async (
-    e: React.FormEvent
-  ) => {
-    e.preventDefault();
+  /* =======================================================
+     ADD ADDRESS
+  ======================================================= */
 
-    if (
-      !addressLine.trim() ||
-      !city.trim() ||
-      !state.trim() ||
-      !pincode.trim()
-    ) {
-      return;
-    }
+  const handleAddAddress =
+    async (
+      e: React.FormEvent
+    ) => {
+      e.preventDefault();
 
-    try {
-      const address =
-        await addressesApi.create({
-          label,
-          addressLine: addressLine.trim(),
-          city: city.trim(),
-          state: state.trim(),
-          pincode: pincode.trim(),
-        });
+      if (
+        !addressLine.trim() ||
+        !city.trim() ||
+        !state.trim() ||
+        !pincode.trim()
+      ) {
+        return;
+      }
 
-      setAddresses((prev) => [
-        ...prev,
-        address,
-      ]);
+      try {
+        const address =
+          await addressesApi.create(
+            {
+              label,
+              addressLine:
+                addressLine.trim(),
+              city:
+                city.trim(),
+              state:
+                state.trim(),
+              pincode:
+                pincode.trim(),
+            }
+          );
 
-      // Reset form
-      setLabel("Home");
-      setAddressLine("");
-      setCity("");
-      setState("");
-      setPincode("");
+        setAddresses(
+          (prev) => {
+            const updated = [
+              ...prev,
+              address,
+            ];
 
-      setShowAddForm(false);
-    } catch (err) {
-      console.error(
-        "Failed to save address:",
-        err
-      );
+            accountAddressesCache =
+              updated;
 
-      alert("Failed to save address");
-    }
-  };
+            return updated;
+          }
+        );
 
-  /*
-   * Delete address
-   */
-  const handleRemoveAddress = async (
-    id: string
-  ) => {
-    try {
-      await addressesApi.delete(id);
+        setLabel("Home");
+        setAddressLine("");
+        setCity("");
+        setState("");
+        setPincode("");
 
-      setAddresses((prev) =>
-        prev.filter(
-          (address) => address.id !== id
-        )
-      );
-    } catch (err) {
-      console.error(
-        "Failed to delete address:",
-        err
-      );
+        setShowAddForm(
+          false
+        );
+      } catch (err) {
+        console.error(
+          "Failed to save address:",
+          err
+        );
 
-      alert("Failed to delete address");
-    }
-  };
+        alert(
+          "Failed to save address"
+        );
+      }
+    };
 
-  /*
-   * Wait until authentication check is completed.
-   */
-  if (!user && !authChecked) {
+  /* =======================================================
+     DELETE ADDRESS
+  ======================================================= */
+
+  const handleRemoveAddress =
+    async (
+      id: string
+    ) => {
+      try {
+        await addressesApi.delete(
+          id
+        );
+
+        setAddresses(
+          (prev) => {
+            const updated =
+              prev.filter(
+                (address) =>
+                  address.id !==
+                  id
+              );
+
+            accountAddressesCache =
+              updated;
+
+            return updated;
+          }
+        );
+      } catch (err) {
+        console.error(
+          "Failed to delete address:",
+          err
+        );
+
+        alert(
+          "Failed to delete address"
+        );
+      }
+    };
+
+  /* =======================================================
+     AUTH LOADING
+  ======================================================= */
+
+  if (
+    !user &&
+    !authChecked
+  ) {
     return (
       <Layout>
         <div className="max-w-md mx-auto px-4 py-24 text-center">
@@ -247,9 +488,10 @@ export function Account() {
     );
   }
 
-  /*
-   * User is not logged in.
-   */
+  /* =======================================================
+     NOT LOGGED IN
+  ======================================================= */
+
   if (!user) {
     return (
       <Layout>
@@ -269,13 +511,14 @@ export function Account() {
     );
   }
 
+  /* =======================================================
+     RENDER
+  ======================================================= */
+
   return (
     <Layout>
       <div className="max-w-7xl mx-auto px-4 py-10">
 
-        {/* =========================
-            PROFILE HEADER
-        ========================== */}
         <div className="flex justify-between items-start gap-4 flex-wrap">
           <div>
             <h1 className="font-serif text-4xl md:text-5xl text-[color:var(--espresso)]">
@@ -287,9 +530,10 @@ export function Account() {
             </p>
           </div>
 
-          {/* Sign Out */}
           <AlertDialog>
-            <AlertDialogTrigger asChild>
+            <AlertDialogTrigger
+              asChild
+            >
               <button
                 type="button"
                 className="pill-gold-outline cursor-pointer"
@@ -319,7 +563,9 @@ export function Account() {
                   className="cursor-pointer"
                   onClick={() => {
                     actions.signOut();
-                    nav({ to: "/" });
+                    nav({
+                      to: "/",
+                    });
                   }}
                 >
                   Sign Out
@@ -333,9 +579,6 @@ export function Account() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
 
-          {/* =========================
-              ORDERS
-          ========================== */}
           <Link
             to="/orders"
             className="block cursor-pointer bg-cream/40 border border-border rounded-xl p-4 text-center hover:border-gold transition"
@@ -349,36 +592,39 @@ export function Account() {
             </p>
           </Link>
 
-          {/* =========================
-              WISHLIST
-          ========================== */}
           <Card
             icon={
               <Heart className="w-4 h-4" />
             }
             title="Wishlist"
           >
-            {wishlist.length === 0 ? (
+            {wishlist.length ===
+            0 ? (
               <p className="text-sm text-[color:var(--muted-foreground)]">
                 No saved items yet.
               </p>
-            ) : previewItems.length === 0 ? (
+            ) : previewItems.length ===
+              0 ? (
               <p className="text-sm text-[color:var(--muted-foreground)]">
                 Loading saved items...
               </p>
             ) : (
               <ul className="space-y-2">
-                {previewItems.map((p) => (
-                  <li
-                    key={p.id}
-                    className="text-sm"
-                  >
-                    {p.name} —{" "}
-                    <span className="text-[color:var(--gold-dark)] font-semibold">
-                      {formatINR(p.price)}
-                    </span>
-                  </li>
-                ))}
+                {previewItems.map(
+                  (p) => (
+                    <li
+                      key={p.id}
+                      className="text-sm"
+                    >
+                      {p.name} —{" "}
+                      <span className="text-[color:var(--gold-dark)] font-semibold">
+                        {formatINR(
+                          p.price
+                        )}
+                      </span>
+                    </li>
+                  )
+                )}
               </ul>
             )}
 
@@ -390,108 +636,127 @@ export function Account() {
             </Link>
           </Card>
 
-          {/* =========================
-              SAVED ADDRESSES
-          ========================== */}
           <Card
             icon={
               <MapPin className="w-4 h-4" />
             }
             title="Saved Addresses"
           >
-            {addresses.length === 0 &&
+            {addresses.length ===
+              0 &&
             !showAddForm ? (
               <p className="text-sm text-[color:var(--muted-foreground)] mb-4">
                 No saved addresses found.
               </p>
             ) : (
               <div className="space-y-3 mb-4">
-                {addresses.map((a) => (
-                  <div
-                    key={a.id}
-                    className="p-3 bg-[color:var(--panel)] rounded-xl border border-[color:var(--border)] flex justify-between items-start"
-                  >
-                    <div>
-                      <span className="label-caps text-[10px] text-[color:var(--gold-dark)] font-bold">
-                        {a.label}
-                      </span>
-
-                      <p className="text-xs text-[color:var(--espresso)] font-medium mt-0.5">
-                        {a.addressLine},{" "}
-                        {a.city},{" "}
-                        {a.state} —{" "}
-                        {a.pincode}
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleRemoveAddress(a.id)
-                      }
-                      className="cursor-pointer text-red-500 p-1 hover:bg-red-50 rounded"
-                      aria-label={`Delete ${a.label} address`}
+                {addresses.map(
+                  (a) => (
+                    <div
+                      key={a.id}
+                      className="p-3 bg-[color:var(--panel)] rounded-xl border border-[color:var(--border)] flex justify-between items-start"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
+                      <div>
+                        <span className="label-caps text-[10px] text-[color:var(--gold-dark)] font-bold">
+                          {a.label}
+                        </span>
+
+                        <p className="text-xs text-[color:var(--espresso)] font-medium mt-0.5">
+                          {
+                            a.addressLine
+                          }
+                          ,{" "}
+                          {a.city},{" "}
+                          {a.state} —{" "}
+                          {
+                            a.pincode
+                          }
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleRemoveAddress(
+                            a.id
+                          )
+                        }
+                        className="cursor-pointer text-red-500 p-1 hover:bg-red-50 rounded"
+                        aria-label={`Delete ${a.label} address`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )
+                )}
               </div>
             )}
 
-            {/* Add Address Form */}
             {showAddForm ? (
               <form
-                onSubmit={handleAddAddress}
+                onSubmit={
+                  handleAddAddress
+                }
                 className="space-y-3 pt-2 border-t border-[color:var(--border)]"
               >
-
-                {/* Address Label */}
                 <div className="flex gap-2">
                   {[
                     "Home",
                     "Work",
                     "Other",
-                  ].map((lbl) => (
-                    <button
-                      type="button"
-                      key={lbl}
-                      onClick={() =>
-                        setLabel(lbl)
-                      }
-                      className={`cursor-pointer px-3 py-1 text-xs rounded-full border transition-colors ${
-                        label === lbl
-                          ? "bg-[color:var(--gold)] text-white border-[color:var(--gold)]"
-                          : "border-[color:var(--border)] text-[color:var(--espresso)] hover:bg-[color:var(--cream)]"
-                      }`}
-                    >
-                      {lbl}
-                    </button>
-                  ))}
+                  ].map(
+                    (lbl) => (
+                      <button
+                        type="button"
+                        key={lbl}
+                        onClick={() =>
+                          setLabel(
+                            lbl
+                          )
+                        }
+                        className={`cursor-pointer px-3 py-1 text-xs rounded-full border transition-colors ${
+                          label ===
+                          lbl
+                            ? "bg-[color:var(--gold)] text-white border-[color:var(--gold)]"
+                            : "border-[color:var(--border)] text-[color:var(--espresso)] hover:bg-[color:var(--cream)]"
+                        }`}
+                      >
+                        {lbl}
+                      </button>
+                    )
+                  )}
                 </div>
 
-                {/* Address */}
                 <input
                   type="text"
                   placeholder="Street / House No. / Area"
-                  value={addressLine}
-                  onChange={(e) =>
+                  value={
+                    addressLine
+                  }
+                  onChange={(
+                    e
+                  ) =>
                     setAddressLine(
-                      e.target.value
+                      e.target
+                        .value
                     )
                   }
                   className="w-full text-xs p-2.5 rounded-lg border border-[color:var(--border)] bg-white"
                   required
                 />
 
-                {/* City + State */}
                 <div className="grid grid-cols-2 gap-2">
                   <input
                     type="text"
                     placeholder="City"
                     value={city}
-                    onChange={(e) =>
-                      setCity(e.target.value)
+                    onChange={(
+                      e
+                    ) =>
+                      setCity(
+                        e.target
+                          .value
+                      )
                     }
                     className="w-full text-xs p-2.5 rounded-lg border border-[color:var(--border)] bg-white"
                     required
@@ -501,22 +766,28 @@ export function Account() {
                     type="text"
                     placeholder="State"
                     value={state}
-                    onChange={(e) =>
-                      setState(e.target.value)
+                    onChange={(
+                      e
+                    ) =>
+                      setState(
+                        e.target
+                          .value
+                      )
                     }
                     className="w-full text-xs p-2.5 rounded-lg border border-[color:var(--border)] bg-white"
                     required
                   />
                 </div>
 
-                {/* Pincode */}
                 <input
                   type="text"
                   inputMode="numeric"
                   maxLength={6}
                   placeholder="Pincode"
                   value={pincode}
-                  onChange={(e) =>
+                  onChange={(
+                    e
+                  ) =>
                     setPincode(
                       e.target.value.replace(
                         /\D/g,
@@ -528,9 +799,7 @@ export function Account() {
                   required
                 />
 
-                {/* Form Actions */}
                 <div className="flex gap-2 pt-1">
-
                   <button
                     type="submit"
                     className="pill-gold !py-1.5 !px-3 text-xs cursor-pointer"
@@ -541,21 +810,23 @@ export function Account() {
                   <button
                     type="button"
                     onClick={() =>
-                      setShowAddForm(false)
+                      setShowAddForm(
+                        false
+                      )
                     }
                     className="cursor-pointer text-xs text-[color:var(--muted-foreground)] px-2 hover:text-[color:var(--espresso)]"
                   >
                     Cancel
                   </button>
-
                 </div>
               </form>
             ) : (
-              /* Add New Address */
               <button
                 type="button"
                 onClick={() =>
-                  setShowAddForm(true)
+                  setShowAddForm(
+                    true
+                  )
                 }
                 className="cursor-pointer text-xs font-semibold text-[color:var(--gold-dark)] inline-flex items-center gap-1 hover:underline mt-1"
               >
@@ -565,9 +836,6 @@ export function Account() {
             )}
           </Card>
 
-          {/* =========================
-              COUPONS
-          ========================== */}
           <Card
             icon={
               <Tag className="w-4 h-4" />
@@ -579,16 +847,15 @@ export function Account() {
               available for your account right now.
             </p>
           </Card>
-
         </div>
       </div>
     </Layout>
   );
 }
 
-/* =========================
+/* =========================================================
    REUSABLE CARD
-========================= */
+========================================================= */
 
 function Card({
   icon,
@@ -601,7 +868,6 @@ function Card({
 }) {
   return (
     <div className="bg-white border border-[color:var(--border)] rounded-2xl p-6">
-
       <div className="flex items-center gap-2 mb-4">
         <span className="w-8 h-8 rounded-full bg-[color:var(--panel)] grid place-items-center text-[color:var(--gold-dark)]">
           {icon}

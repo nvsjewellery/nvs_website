@@ -1,5 +1,13 @@
 import { useSyncExternalStore } from "react";
-import { api, wishlistApi, cartApi } from "@/lib/api";
+import {
+  api,
+  wishlistApi,
+  cartApi,
+} from "@/lib/api";
+
+/* =========================================================
+   PRODUCT
+========================================================= */
 
 export interface Product {
   id: string;
@@ -20,10 +28,18 @@ export interface Product {
   details?: string;
 }
 
+/* =========================================================
+   CART
+========================================================= */
+
 export type CartItem = {
   productId: string;
   qty: number;
 };
+
+/* =========================================================
+   USER
+========================================================= */
 
 type User = {
   id: string;
@@ -31,6 +47,10 @@ type User = {
   email: string;
   phone?: string | null;
 };
+
+/* =========================================================
+   STATE
+========================================================= */
 
 type State = {
   cart: CartItem[];
@@ -46,18 +66,31 @@ let state: State = {
   authChecked: false,
 };
 
+/* =========================================================
+   LISTENERS
+========================================================= */
+
 const listeners = new Set<() => void>();
 
 function emit() {
-  listeners.forEach((listener) => listener());
+  listeners.forEach((listener) => {
+    listener();
+  });
 }
 
 function subscribe(listener: () => void) {
   listeners.add(listener);
-  return () => listeners.delete(listener);
+
+  return () => {
+    listeners.delete(listener);
+  };
 }
 
 const getSnapshot = () => state;
+
+/* =========================================================
+   SERVER SNAPSHOT
+========================================================= */
 
 const SERVER_SNAPSHOT: State = {
   cart: [],
@@ -66,9 +99,16 @@ const SERVER_SNAPSHOT: State = {
   authChecked: false,
 };
 
-const getServerSnapshot = () => SERVER_SNAPSHOT;
+const getServerSnapshot = () =>
+  SERVER_SNAPSHOT;
 
-export function useStore<T>(selector: (state: State) => T): T {
+/* =========================================================
+   STORE HOOK
+========================================================= */
+
+export function useStore<T>(
+  selector: (state: State) => T
+): T {
   return useSyncExternalStore(
     subscribe,
     () => selector(getSnapshot()),
@@ -76,43 +116,92 @@ export function useStore<T>(selector: (state: State) => T): T {
   );
 }
 
+/* =========================================================
+   ACTIONS
+========================================================= */
+
 export const actions = {
-  async addToCart(productId: string, qty = 1) {
-    if (!state.user) return;
+  /* =======================================================
+     ADD TO CART
+  ======================================================= */
 
-    await cartApi.add(productId, qty);
-
-    state.cart = await cartApi.getAll();
-
-    emit();
-  },
-
-  async updateQty(productId: string, qty: number) {
-    if (!state.user) return;
-
-    if (qty <= 0) {
-      await cartApi.remove(productId);
-    } else {
-      await cartApi.update(productId, qty);
+  async addToCart(
+    productId: string,
+    qty = 1
+  ) {
+    if (!state.user) {
+      return;
     }
 
-    state.cart = await cartApi.getAll();
+    await cartApi.add(
+      productId,
+      qty
+    );
+
+    state.cart =
+      await cartApi.getAll();
 
     emit();
   },
 
-  async removeFromCart(productId: string) {
-    if (!state.user) return;
+  /* =======================================================
+     UPDATE CART QUANTITY
+  ======================================================= */
 
-    await cartApi.remove(productId);
+  async updateQty(
+    productId: string,
+    qty: number
+  ) {
+    if (!state.user) {
+      return;
+    }
 
-    state.cart = await cartApi.getAll();
+    if (qty <= 0) {
+      await cartApi.remove(
+        productId
+      );
+    } else {
+      await cartApi.update(
+        productId,
+        qty
+      );
+    }
+
+    state.cart =
+      await cartApi.getAll();
 
     emit();
   },
+
+  /* =======================================================
+     REMOVE FROM CART
+  ======================================================= */
+
+  async removeFromCart(
+    productId: string
+  ) {
+    if (!state.user) {
+      return;
+    }
+
+    await cartApi.remove(
+      productId
+    );
+
+    state.cart =
+      await cartApi.getAll();
+
+    emit();
+  },
+
+  /* =======================================================
+     CLEAR CART
+  ======================================================= */
 
   async clearCart() {
-    if (!state.user) return;
+    if (!state.user) {
+      return;
+    }
 
     await cartApi.clear();
 
@@ -121,66 +210,148 @@ export const actions = {
     emit();
   },
 
-  async toggleWishlist(productId: string) {
-    if (!state.user) return;
+  /* =======================================================
+     TOGGLE WISHLIST
+  ======================================================= */
 
-    if (state.wishlist.includes(productId)) {
-      await wishlistApi.remove(productId);
-    } else {
-      await wishlistApi.add(productId);
+  async toggleWishlist(
+    productId: string
+  ) {
+    if (!state.user) {
+      return;
     }
 
-    state.wishlist = await wishlistApi.getAll();
+    if (
+      state.wishlist.includes(
+        productId
+      )
+    ) {
+      await wishlistApi.remove(
+        productId
+      );
+    } else {
+      await wishlistApi.add(
+        productId
+      );
+    }
+
+    state.wishlist =
+      await wishlistApi.getAll();
 
     emit();
   },
 
-  async register(name: string, email: string, password: string) {
-    const res = await api.register(name, email, password);
+  /* =======================================================
+     REGISTER
+  ======================================================= */
 
-    if (!res.user) return;
+  async register(
+    name: string,
+    email: string,
+    password: string
+  ) {
+    const res =
+      await api.register(
+        name,
+        email,
+        password
+      );
+
+    if (!res.user) {
+      return;
+    }
 
     state.user = res.user;
     state.authChecked = true;
 
-    state.cart = await cartApi.getAll();
-    state.wishlist = await wishlistApi.getAll();
+    const [cart, wishlist] =
+      await Promise.all([
+        cartApi.getAll(),
+        wishlistApi.getAll(),
+      ]);
+
+    state.cart = cart;
+    state.wishlist = wishlist;
 
     emit();
   },
 
-  async signIn(email: string, password: string) {
-    const res = await api.login(email, password);
+  /* =======================================================
+     SIGN IN
+  ======================================================= */
 
-    if (!res.user) return;
+  async signIn(
+    email: string,
+    password: string
+  ) {
+    const res =
+      await api.login(
+        email,
+        password
+      );
+
+    if (!res.user) {
+      return;
+    }
 
     state.user = res.user;
     state.authChecked = true;
 
-    state.cart = await cartApi.getAll();
-    state.wishlist = await wishlistApi.getAll();
+    const [cart, wishlist] =
+      await Promise.all([
+        cartApi.getAll(),
+        wishlistApi.getAll(),
+      ]);
+
+    state.cart = cart;
+    state.wishlist = wishlist;
 
     emit();
   },
 
-  async resetPassword(token: string, password: string) {
-    const res = await api.resetPassword(token, password);
+  /* =======================================================
+     RESET PASSWORD
+  ======================================================= */
 
-    if (!res.user) return;
+  async resetPassword(
+    token: string,
+    password: string
+  ) {
+    const res =
+      await api.resetPassword(
+        token,
+        password
+      );
+
+    if (!res.user) {
+      return;
+    }
 
     state.user = res.user;
     state.authChecked = true;
 
-    state.cart = await cartApi.getAll();
-    state.wishlist = await wishlistApi.getAll();
+    const [cart, wishlist] =
+      await Promise.all([
+        cartApi.getAll(),
+        wishlistApi.getAll(),
+      ]);
+
+    state.cart = cart;
+    state.wishlist = wishlist;
 
     emit();
   },
+
+  /* =======================================================
+     SIGN OUT
+  ======================================================= */
 
   async signOut() {
     try {
       await api.logout();
-    } catch {}
+    } catch {
+      // Ignore logout API errors.
+    }
 
     state.user = null;
     state.cart = [];
@@ -190,24 +361,47 @@ export const actions = {
     emit();
   },
 
+  /* =======================================================
+     CHECK AUTH
+  ======================================================= */
+
   async checkAuth() {
+    /*
+     * Prevent duplicate authentication
+     * requests during the same application
+     * session.
+     */
+    if (state.authChecked) {
+      return;
+    }
+
     try {
-      const res = await api.getMe();
+      const res =
+        await api.getMe();
 
       if (!res.user) {
         state.user = null;
         state.cart = [];
         state.wishlist = [];
         state.authChecked = true;
+
         emit();
         return;
       }
 
       state.user = res.user;
 
-      state.cart = await cartApi.getAll();
-      state.wishlist = await wishlistApi.getAll();
+      /*
+       * Fetch cart and wishlist in parallel.
+       */
+      const [cart, wishlist] =
+        await Promise.all([
+          cartApi.getAll(),
+          wishlistApi.getAll(),
+        ]);
 
+      state.cart = cart;
+      state.wishlist = wishlist;
       state.authChecked = true;
 
       emit();
@@ -222,21 +416,43 @@ export const actions = {
   },
 };
 
-if (typeof window !== "undefined") {
+/* =========================================================
+   INITIAL AUTH CHECK
+========================================================= */
+
+if (
+  typeof window !== "undefined"
+) {
   actions.checkAuth();
 }
 
-export let LIVE_RATES: Record<string, number> = {
+/* =========================================================
+   LIVE RATES
+========================================================= */
+
+export let LIVE_RATES: Record<
+  string,
+  number
+> = {
   "24K": 14493,
   "22K": 13285,
   "18K": 10870,
   "14K": 8454,
   "9K": 5435,
   PT950: 3450,
-  "92.5": 222,        
+  "92.5": 222,
 };
 
-export function setLiveRates(newRates: Record<string, number>) {
+/* =========================================================
+   SET LIVE RATES
+========================================================= */
+
+export function setLiveRates(
+  newRates: Record<
+    string,
+    number
+  >
+) {
   LIVE_RATES = {
     ...LIVE_RATES,
     ...newRates,
@@ -245,32 +461,47 @@ export function setLiveRates(newRates: Record<string, number>) {
   emit();
 }
 
+/* =========================================================
+   COMPUTE PRICE BREAKDOWN
+========================================================= */
+
 export function computeBreakdown(
   weight: number,
   purity: string,
   makingPct = 12,
   gstPct = 3
 ) {
-  const base24K = LIVE_RATES["24K"] ?? 14493;
+  const base24K =
+    LIVE_RATES["24K"] ??
+    14493;
 
-  let rate = LIVE_RATES[purity];
+  let rate =
+    LIVE_RATES[purity];
 
   if (!rate) {
     switch (purity) {
       case "22K":
-        rate = base24K * (22 / 24);
+        rate =
+          base24K *
+          (22 / 24);
         break;
 
       case "18K":
-        rate = base24K * (18 / 24);
+        rate =
+          base24K *
+          (18 / 24);
         break;
 
       case "14K":
-        rate = base24K * (14 / 24);
+        rate =
+          base24K *
+          (14 / 24);
         break;
 
       case "9K":
-        rate = base24K * (9 / 24);
+        rate =
+          base24K *
+          (9 / 24);
         break;
 
       default:
@@ -278,11 +509,29 @@ export function computeBreakdown(
     }
   }
 
-  const metalValue = Math.round((weight || 0) * rate);
-  const making = Math.round(metalValue * (makingPct / 100));
-  const subtotal = metalValue + making;
-  const gst = Math.round(subtotal * (gstPct / 100));
-  const total = subtotal + gst;
+  const metalValue =
+    Math.round(
+      (weight || 0) *
+        rate
+    );
+
+  const making =
+    Math.round(
+      metalValue *
+        (makingPct / 100)
+    );
+
+  const subtotal =
+    metalValue + making;
+
+  const gst =
+    Math.round(
+      subtotal *
+        (gstPct / 100)
+    );
+
+  const total =
+    subtotal + gst;
 
   return {
     metalValue,
@@ -294,6 +543,16 @@ export function computeBreakdown(
   };
 }
 
-export function formatINR(amount: number) {
-  return `₹${(amount || 0).toLocaleString("en-IN")}`;
+/* =========================================================
+   FORMAT INR
+========================================================= */
+
+export function formatINR(
+  amount: number
+) {
+  return `₹${(
+    amount || 0
+  ).toLocaleString(
+    "en-IN"
+  )}`;
 }

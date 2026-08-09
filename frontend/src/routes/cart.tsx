@@ -1,11 +1,20 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+} from "@tanstack/react-router";
+
 import {
   Minus,
   Plus,
   Trash2,
   Tag,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import { Layout } from "@/components/Layout";
 import { OrnamentalDivider } from "@/components/OrnamentalDivider";
@@ -23,22 +32,67 @@ import {
   useStore,
 } from "@/lib/store";
 
-export const Route = createFileRoute("/cart")({
-  component: CartPage,
-});
-
 /* =========================================================
    PRODUCT CACHE
 ========================================================= */
 
-const productCache: Record<string, any> = {};
+const productCache: Record<
+  string,
+  any
+> = {};
+
+/* =========================================================
+   DISCOUNT CACHE
+========================================================= */
+
+let availableDiscountsCache:
+  | Discount[]
+  | null = null;
+
+let availableDiscountsPromise:
+  | Promise<Discount[]>
+  | null = null;
+
+async function getCachedDiscounts(): Promise<
+  Discount[]
+> {
+  if (
+    availableDiscountsCache
+  ) {
+    return availableDiscountsCache;
+  }
+
+  if (
+    availableDiscountsPromise
+  ) {
+    return availableDiscountsPromise;
+  }
+
+  availableDiscountsPromise =
+    discountsApi
+      .getAvailable()
+      .then((discounts) => {
+        availableDiscountsCache =
+          discounts;
+
+        return discounts;
+      })
+      .finally(() => {
+        availableDiscountsPromise =
+          null;
+      });
+
+  return availableDiscountsPromise;
+}
 
 /* =========================================================
    CART PAGE
 ========================================================= */
 
 function CartPage() {
-  const cart = useStore((s) => s.cart);
+  const cart = useStore(
+    (s) => s.cart
+  );
 
   /* =======================================================
      COUPON STATE
@@ -47,52 +101,81 @@ function CartPage() {
   const [coupon, setCoupon] =
     useState("");
 
-  const [appliedCoupon, setAppliedCoupon] =
-    useState<Discount | null>(() => {
-      if (typeof window === "undefined") {
-        return null;
+  const [
+    appliedCoupon,
+    setAppliedCoupon,
+  ] =
+    useState<Discount | null>(
+      () => {
+        if (
+          typeof window ===
+          "undefined"
+        ) {
+          return null;
+        }
+
+        try {
+          const stored =
+            sessionStorage.getItem(
+              "nvs-applied-coupon"
+            );
+
+          return stored
+            ? (JSON.parse(
+                stored
+              ) as Discount)
+            : null;
+        } catch {
+          return null;
+        }
       }
+    );
 
-      try {
-        const stored = sessionStorage.getItem(
-          "nvs-applied-coupon"
-        );
+  const [
+    couponLoading,
+    setCouponLoading,
+  ] = useState(false);
 
-        return stored
-          ? (JSON.parse(stored) as Discount)
-          : null;
-      } catch {
-        return null;
-      }
-    });
+  const [
+    couponError,
+    setCouponError,
+  ] = useState("");
 
-  const [couponLoading, setCouponLoading] =
-    useState(false);
-
-  const [couponError, setCouponError] =
-    useState("");
-
-  const [couponSuccess, setCouponSuccess] =
-    useState("");
+  const [
+    couponSuccess,
+    setCouponSuccess,
+  ] = useState("");
 
   /* =======================================================
      DISCOUNT STATE
   ======================================================= */
 
-  const [availableDiscounts, setAvailableDiscounts] =
-    useState<Discount[]>([]);
+  const [
+    availableDiscounts,
+    setAvailableDiscounts,
+  ] = useState<Discount[]>(
+    () =>
+      availableDiscountsCache ??
+      []
+  );
 
-  const [discountLoading, setDiscountLoading] =
-    useState(false);
+  const [
+    discountLoading,
+    setDiscountLoading,
+  ] = useState(
+    !availableDiscountsCache
+  );
 
   /* =======================================================
      PRODUCT STATE
   ======================================================= */
 
-  const [productsMap, setProductsMap] =
-    useState<Record<string, any>>(
-      productCache
-    );
+  const [
+    productsMap,
+    setProductsMap,
+  ] = useState<
+    Record<string, any>
+  >(productCache);
 
   const [loading, setLoading] =
     useState(false);
@@ -102,7 +185,10 @@ function CartPage() {
   ======================================================= */
 
   const cartKeys = cart
-    .map((c: any) => c.productId)
+    .map(
+      (c: any) =>
+        c.productId
+    )
     .join(",");
 
   /* =======================================================
@@ -113,19 +199,26 @@ function CartPage() {
     let isMounted = true;
 
     async function loadCartProducts() {
-      const missingIds = cart
-        .map((c: any) => c.productId)
-        .filter(
-          (id: string) =>
-            !productCache[id]
-        );
+      const missingIds =
+        cart
+          .map(
+            (c: any) =>
+              c.productId
+          )
+          .filter(
+            (id: string) =>
+              !productCache[id]
+          );
 
       if (
-        missingIds.length === 0
+        missingIds.length ===
+        0
       ) {
         setProductsMap({
           ...productCache,
         });
+
+        setLoading(false);
 
         return;
       }
@@ -138,7 +231,9 @@ function CartPage() {
             (id: string) =>
               productsApi
                 .getById(id)
-                .catch(() => null)
+                .catch(
+                  () => null
+                )
           );
 
         const results =
@@ -146,11 +241,18 @@ function CartPage() {
             promises
           );
 
-        results.forEach((p) => {
-          if (p && p.id) {
-            productCache[p.id] = p;
+        results.forEach(
+          (p) => {
+            if (
+              p &&
+              p.id
+            ) {
+              productCache[
+                p.id
+              ] = p;
+            }
           }
-        });
+        );
 
         if (isMounted) {
           setProductsMap({
@@ -184,11 +286,25 @@ function CartPage() {
     let cancelled = false;
 
     async function loadDiscounts() {
+      if (
+        availableDiscountsCache
+      ) {
+        setAvailableDiscounts(
+          availableDiscountsCache
+        );
+
+        setDiscountLoading(
+          false
+        );
+
+        return;
+      }
+
       setDiscountLoading(true);
 
       try {
         const discounts =
-          await discountsApi.getAvailable();
+          await getCachedDiscounts();
 
         if (!cancelled) {
           setAvailableDiscounts(
@@ -208,7 +324,9 @@ function CartPage() {
         }
       } finally {
         if (!cancelled) {
-          setDiscountLoading(false);
+          setDiscountLoading(
+            false
+          );
         }
       }
     }
@@ -227,7 +345,9 @@ function CartPage() {
   const items = cart
     .map((c: any) => ({
       ...c,
-      p: productsMap[c.productId],
+      p: productsMap[
+        c.productId
+      ],
     }))
     .filter((c: any) =>
       Boolean(c.p)
@@ -259,13 +379,12 @@ function CartPage() {
     discount: Discount,
     product: any
   ) {
-    if (!discount || !product) {
+    if (
+      !discount ||
+      !product
+    ) {
       return false;
     }
-
-    /* -----------------------------------------------------
-       METAL RESTRICTION
-    ----------------------------------------------------- */
 
     if (
       discount.metal &&
@@ -275,26 +394,20 @@ function CartPage() {
       return false;
     }
 
-    /* -----------------------------------------------------
-       PRODUCT DISCOUNT
-    ----------------------------------------------------- */
-
     if (
       discount.target ===
       "PRODUCT"
     ) {
       return (
         discount.products?.some(
-          (discountProduct) =>
+          (
+            discountProduct
+          ) =>
             discountProduct.id ===
             product.id
         ) ?? false
       );
     }
-
-    /* -----------------------------------------------------
-       CATEGORY DISCOUNT
-    ----------------------------------------------------- */
 
     if (
       discount.target ===
@@ -314,16 +427,14 @@ function CartPage() {
           .toLowerCase();
 
       return (
-        productCategory !== "" &&
-        discountCategory !== "" &&
+        productCategory !==
+          "" &&
+        discountCategory !==
+          "" &&
         productCategory ===
           discountCategory
       );
     }
-
-    /* -----------------------------------------------------
-       CART DISCOUNT
-    ----------------------------------------------------- */
 
     if (
       discount.target ===
@@ -344,19 +455,6 @@ function CartPage() {
     product: any,
     breakdown: any
   ) {
-    /*
-     * Backend discount service uses product.va.
-     *
-     * We therefore prefer:
-     *
-     * 1. product.va
-     * 2. product.making
-     * 3. breakdown.making
-     *
-     * This keeps the frontend compatible
-     * with the product data already being returned.
-     */
-
     return Number(
       product?.va ??
         product?.making ??
@@ -375,7 +473,9 @@ function CartPage() {
     discount: Discount
   ) {
     const va =
-      Number(vaAmount || 0);
+      Number(
+        vaAmount || 0
+      );
 
     const value =
       Number(
@@ -396,7 +496,8 @@ function CartPage() {
       "percent"
     ) {
       amount =
-        (va * value) / 100;
+        (va * value) /
+        100;
     } else if (
       discount.kind ===
       "flat"
@@ -404,12 +505,11 @@ function CartPage() {
       amount = value;
     }
 
-    /*
-     * Discount can never exceed VA.
-     */
-
     return Math.min(
-      Math.max(amount, 0),
+      Math.max(
+        amount,
+        0
+      ),
       va
     );
   }
@@ -423,10 +523,6 @@ function CartPage() {
   ): Discount | null {
     const candidates: Discount[] =
       [];
-
-    /* -----------------------------------------------------
-       SEASONAL DISCOUNTS
-    ----------------------------------------------------- */
 
     const seasonalDiscounts =
       availableDiscounts.filter(
@@ -449,18 +545,16 @@ function CartPage() {
       ...seasonalDiscounts
     );
 
-    /* -----------------------------------------------------
-       APPLIED COUPON
-    ----------------------------------------------------- */
-
     if (
       appliedCoupon &&
       appliedCoupon.type ===
         "COUPON" &&
-      (appliedCoupon.target ===
-        "PRODUCT" ||
+      (
         appliedCoupon.target ===
-          "CATEGORY")
+          "PRODUCT" ||
+        appliedCoupon.target ===
+          "CATEGORY"
+      )
     ) {
       if (
         discountAppliesToProduct(
@@ -481,13 +575,6 @@ function CartPage() {
       return null;
     }
 
-    /*
-     * We cannot simply compare
-     * percentage values.
-     *
-     * Actual VA amount must be compared.
-     */
-
     let bestDiscount:
       | Discount
       | null = null;
@@ -495,7 +582,8 @@ function CartPage() {
     let bestAmount = 0;
 
     for (
-      const discount of candidates
+      const discount of
+        candidates
     ) {
       const weightVal =
         Number(
@@ -524,7 +612,8 @@ function CartPage() {
         );
 
       if (
-        amount > bestAmount
+        amount >
+        bestAmount
       ) {
         bestAmount =
           amount;
@@ -538,109 +627,122 @@ function CartPage() {
   }
 
   /* =======================================================
-   REVALIDATE STORED COUPON AFTER CART LOAD
-======================================================= */
+     REVALIDATE STORED COUPON
+  ======================================================= */
 
-useEffect(() => {
-  if (!appliedCoupon?.code || items.length === 0) {
-    return;
-  }
-
-  let cancelled = false;
-
-  async function revalidateCoupon() {
-    const couponCode = appliedCoupon?.code?.trim();
-
-    if (!couponCode) {
+  useEffect(() => {
+    if (
+      !appliedCoupon?.code ||
+      items.length === 0
+    ) {
       return;
     }
 
-    try {
-      const validated =
-        await discountsApi.validateCoupon(
-          couponCode
-        );
+    let cancelled = false;
 
-      if (cancelled) {
+    async function revalidateCoupon() {
+      const couponCode =
+        appliedCoupon?.code?.trim();
+
+      if (!couponCode) {
         return;
       }
 
-      /*
-       * Make sure the stored discount
-       * is still a valid coupon.
-       */
+      try {
+        const validated =
+          await discountsApi.validateCoupon(
+            couponCode
+          );
 
-      if (
-        !validated ||
-        validated.type !== "COUPON"
-      ) {
-        setAppliedCoupon(null);
+        if (cancelled) {
+          return;
+        }
+
+        if (
+          !validated ||
+          validated.type !==
+            "COUPON"
+        ) {
+          setAppliedCoupon(
+            null
+          );
+
+          setCoupon("");
+
+          setCouponError(
+            "This coupon is no longer valid."
+          );
+
+          setCouponSuccess("");
+
+          return;
+        }
+
+        const applies =
+          items.some(
+            (item: any) =>
+              discountAppliesToProduct(
+                validated,
+                item.p
+              )
+          );
+
+        if (!applies) {
+          setAppliedCoupon(
+            null
+          );
+
+          setCoupon("");
+
+          setCouponError(
+            "This coupon no longer applies to your cart."
+          );
+
+          setCouponSuccess("");
+
+          return;
+        }
+
+        setAppliedCoupon(
+          validated
+        );
+
+        setCouponSuccess(
+          validated.name
+            ? `${validated.name} applied successfully.`
+            : "Coupon applied successfully."
+        );
+      } catch {
+        if (cancelled) {
+          return;
+        }
+
+        setAppliedCoupon(
+          null
+        );
+
         setCoupon("");
+
         setCouponError(
-          "This coupon is no longer valid."
+          "Unable to validate the coupon."
         );
+
         setCouponSuccess("");
-        return;
       }
-
-      /*
-       * Make sure the coupon still
-       * applies to something in the cart.
-       */
-
-      const applies = items.some(
-        (item: any) =>
-          discountAppliesToProduct(
-            validated,
-            item.p
-          )
-      );
-
-      if (!applies) {
-        setAppliedCoupon(null);
-        setCoupon("");
-        setCouponError(
-          "This coupon no longer applies to your cart."
-        );
-        setCouponSuccess("");
-        return;
-      }
-
-      /*
-       * Store the freshly validated
-       * coupon returned by backend.
-       */
-
-      setAppliedCoupon(validated);
-
-      setCouponSuccess(
-        validated.name
-          ? `${validated.name} applied successfully.`
-          : "Coupon applied successfully."
-      );
-    } catch (error) {
-      if (cancelled) {
-        return;
-      }
-
-      setAppliedCoupon(null);
-      setCoupon("");
-      setCouponError(
-        "Unable to validate the coupon."
-      );
-      setCouponSuccess("");
     }
-  }
 
-  revalidateCoupon();
+    revalidateCoupon();
 
-  return () => {
-    cancelled = true;
-  };
-}, [appliedCoupon?.code, items]);
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    appliedCoupon?.code,
+    items,
+  ]);
 
   /* =======================================================
-     CALCULATE CART ITEMS WITH DISCOUNTS
+     CALCULATE CART ITEMS
   ======================================================= */
 
   const calculatedItems =
@@ -705,23 +807,14 @@ useEffect(() => {
 
           return {
             ...item,
-
             weightVal,
-
             breakdown,
-
             itemPrice,
-
             vaAmount,
-
             productDiscount,
-
             discountPerUnit,
-
             originalTotal,
-
             discountTotal,
-
             finalTotal,
           };
         }
@@ -800,11 +893,6 @@ useEffect(() => {
             return current;
           }
 
-          /*
-           * Compare actual discount
-           * amount against the cart VA.
-           */
-
           const bestAmount =
             calculateDiscountAmount(
               cartVaTotal,
@@ -839,16 +927,14 @@ useEffect(() => {
 
   /* =======================================================
      CART COUPON
-
-     A CART coupon is applied ONCE against
-     the TOTAL cart VA. It is NOT multiplied
-     by the number of products.
   ======================================================= */
 
   const cartCouponAmount =
     appliedCoupon &&
-    appliedCoupon.type === "COUPON" &&
-    appliedCoupon.target === "CART"
+    appliedCoupon.type ===
+      "COUPON" &&
+    appliedCoupon.target ===
+      "CART"
       ? calculateDiscountAmount(
           cartVaTotal,
           appliedCoupon
@@ -866,7 +952,10 @@ useEffect(() => {
 
   const totalDiscount =
     Math.min(
-      Math.max(requestedTotalDiscount, 0),
+      Math.max(
+        requestedTotalDiscount,
+        0
+      ),
       cartVaTotal
     );
 
@@ -908,11 +997,6 @@ useEffect(() => {
           code
         );
 
-      /*
-       * Make sure the validated
-       * response is actually a coupon.
-       */
-
       if (
         validatedCoupon.type !==
         "COUPON"
@@ -921,12 +1005,6 @@ useEffect(() => {
           "This code is not a valid coupon."
         );
       }
-
-      /*
-       * Check whether the coupon
-       * applies to at least one
-       * product in the cart.
-       */
 
       const applies =
         items.some(
@@ -949,7 +1027,9 @@ useEffect(() => {
 
       sessionStorage.setItem(
         "nvs-applied-coupon",
-        JSON.stringify(validatedCoupon)
+        JSON.stringify(
+          validatedCoupon
+        )
       );
 
       setCouponSuccess(
@@ -958,8 +1038,13 @@ useEffect(() => {
           : "Coupon applied successfully."
       );
     } catch (error: any) {
-      setAppliedCoupon(null);
-      sessionStorage.removeItem("nvs-applied-coupon");
+      setAppliedCoupon(
+        null
+      );
+
+      sessionStorage.removeItem(
+        "nvs-applied-coupon"
+      );
 
       setCouponError(
         error?.message ||
@@ -976,9 +1061,15 @@ useEffect(() => {
 
   function handleRemoveCoupon() {
     setAppliedCoupon(null);
-    sessionStorage.removeItem("nvs-applied-coupon");
+
+    sessionStorage.removeItem(
+      "nvs-applied-coupon"
+    );
+
     setCoupon("");
+
     setCouponError("");
+
     setCouponSuccess("");
   }
 
@@ -1007,19 +1098,11 @@ useEffect(() => {
     <Layout>
       <div className="max-w-7xl mx-auto px-4 py-10">
 
-        {/* =================================================
-            HEADER
-        ================================================= */}
-
         <h1 className="font-serif text-4xl md:text-5xl text-[color:var(--espresso)]">
           Your Cart
         </h1>
 
         <OrnamentalDivider className="mt-6 mb-8" />
-
-        {/* =================================================
-            LOADING
-        ================================================= */}
 
         {loading &&
         calculatedItems.length ===
@@ -1038,13 +1121,7 @@ useEffect(() => {
           </div>
         ) : calculatedItems.length ===
           0 ? (
-
-          /* =================================================
-             EMPTY CART
-          ================================================= */
-
           <div className="text-center py-20">
-
             <p className="text-[color:var(--muted-foreground)]">
               Your cart is empty.
             </p>
@@ -1055,22 +1132,11 @@ useEffect(() => {
             >
               Browse Collection
             </Link>
-
           </div>
         ) : (
-
-          /* =================================================
-             CART
-          ================================================= */
-
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8">
 
-            {/* =================================================
-                CART ITEMS
-            ================================================= */}
-
             <div className="space-y-4">
-
               {calculatedItems.map(
                 (item: any) => (
                   <div
@@ -1079,9 +1145,6 @@ useEffect(() => {
                     }
                     className="bg-white border border-[color:var(--border)] rounded-2xl p-4 flex gap-4"
                   >
-
-                    {/* Product Image */}
-
                     <Link
                       to="/product/$id"
                       params={{
@@ -1100,14 +1163,10 @@ useEffect(() => {
                       />
                     </Link>
 
-                    {/* Product Details */}
-
                     <div className="flex-1 min-w-0 flex flex-col">
-
                       <div className="flex justify-between gap-3">
 
                         <div className="min-w-0">
-
                           <Link
                             to="/product/$id"
                             params={{
@@ -1117,8 +1176,7 @@ useEffect(() => {
                           >
                             <h3 className="font-serif font-bold text-[color:var(--espresso)] hover:text-[color:var(--gold-dark)] transition-colors">
                               {
-                                item
-                                  .p
+                                item.p
                                   .name
                               }
                             </h3>
@@ -1126,42 +1184,31 @@ useEffect(() => {
 
                           <p className="text-xs text-[color:var(--muted-foreground)] mt-1">
                             {
-                              item
-                                .p
+                              item.p
                                 .purity
                             }{" "}
                             ·{" "}
                             {
                               item.weightVal
-                            }
+                            }{" "}
                             g
                           </p>
 
-                          {/* Product Discount */}
-
                           {item.productDiscount && (
                             <div className="flex items-center gap-1.5 mt-2 text-xs text-green-700 font-medium">
-
                               <Tag className="w-3.5 h-3.5" />
 
                               <span>
-                                {
-                                  getDiscountLabel(
-                                    item.productDiscount
-                                  )
-                                }{" "}
+                                {getDiscountLabel(
+                                  item.productDiscount
+                                )}{" "}
                                 on making charges
                               </span>
-
                             </div>
                           )}
-
                         </div>
 
-                        {/* Price */}
-
                         <div className="text-right shrink-0">
-
                           {item.discountTotal >
                           0 ? (
                             <>
@@ -1195,18 +1242,12 @@ useEffect(() => {
                           <div className="text-[10px] text-[color:var(--muted-foreground)]">
                             incl. GST
                           </div>
-
                         </div>
                       </div>
 
-                      {/* Bottom Actions */}
-
                       <div className="flex items-center justify-between mt-auto pt-3">
 
-                        {/* Quantity */}
-
                         <div className="flex items-center border border-[color:var(--border)] rounded-full">
-
                           <button
                             type="button"
                             onClick={() =>
@@ -1242,10 +1283,7 @@ useEffect(() => {
                           >
                             <Plus className="w-3.5 h-3.5" />
                           </button>
-
                         </div>
-
-                        {/* Remove */}
 
                         <button
                           type="button"
@@ -1257,21 +1295,14 @@ useEffect(() => {
                           className="text-destructive text-xs font-medium inline-flex items-center gap-1 cursor-pointer hover:opacity-75 transition-opacity"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
-
                           Remove
                         </button>
-
                       </div>
                     </div>
                   </div>
                 )
               )}
-
             </div>
-
-            {/* =================================================
-                ORDER SUMMARY
-            ================================================= */}
 
             <div
               style={{
@@ -1280,14 +1311,9 @@ useEffect(() => {
               }}
               className="rounded-2xl p-6 h-fit"
             >
-
               <h3 className="font-serif text-xl text-[color:var(--espresso)] mb-4">
                 Order Summary
               </h3>
-
-              {/* =================================================
-                  SUBTOTAL
-              ================================================= */}
 
               <Row
                 l="Subtotal"
@@ -1295,10 +1321,6 @@ useEffect(() => {
                   subtotal
                 )}
               />
-
-              {/* =================================================
-                  CUSTOMER DISCOUNT
-              ================================================= */}
 
               {customerDiscount &&
                 customerDiscountAmount >
@@ -1319,30 +1341,24 @@ useEffect(() => {
                   />
                 )}
 
-              {/* =================================================
-                  CART COUPON DISCOUNT
-              ================================================= */}
-
               {appliedCoupon &&
-                cartCouponAmount > 0 && (
-                <Row
-                  l={
-                    appliedCoupon.name ||
-                    "Coupon Discount"
-                  }
-                  v={
-                    <span className="text-green-700">
-                      -{formatINR(
-                        cartCouponAmount
-                      )}
-                    </span>
-                  }
-                />
-              )}
-
-              {/* =================================================
-                  PRODUCT / SEASONAL DISCOUNT
-              ================================================= */}
+                cartCouponAmount >
+                  0 && (
+                  <Row
+                    l={
+                      appliedCoupon.name ||
+                      "Coupon Discount"
+                    }
+                    v={
+                      <span className="text-green-700">
+                        -
+                        {formatINR(
+                          cartCouponAmount
+                        )}
+                      </span>
+                    }
+                  />
+                )}
 
               {productDiscountTotal >
                 0 && (
@@ -1359,16 +1375,10 @@ useEffect(() => {
                 />
               )}
 
-              {/* =================================================
-                  TOTAL SAVINGS
-              ================================================= */}
-
               {totalDiscount >
                 0 && (
                 <div className="mt-3 rounded-xl bg-green-50 border border-green-100 px-3 py-2">
-
                   <div className="flex items-center gap-2 text-xs font-medium text-green-700">
-
                     <Tag className="w-3.5 h-3.5" />
 
                     <span>
@@ -1377,32 +1387,23 @@ useEffect(() => {
                         totalDiscount
                       )}
                     </span>
-
                   </div>
-
                 </div>
               )}
 
-              {/* =================================================
-                  COUPON
-              ================================================= */}
-
               <div className="mt-4">
-
                 {appliedCoupon ? (
-
                   <div className="rounded-xl border border-green-200 bg-green-50 p-3">
-
                     <div className="flex items-start justify-between gap-3">
-
                       <div>
-
                         <p className="text-xs font-semibold text-green-800">
                           Coupon Applied
                         </p>
 
                         <p className="text-sm font-medium text-green-700 mt-1">
-                          {appliedCoupon.code}
+                          {
+                            appliedCoupon.code
+                          }
                         </p>
 
                         {appliedCoupon.name && (
@@ -1412,7 +1413,6 @@ useEffect(() => {
                             }
                           </p>
                         )}
-
                       </div>
 
                       <button
@@ -1424,20 +1424,18 @@ useEffect(() => {
                       >
                         Remove
                       </button>
-
                     </div>
-
                   </div>
-
                 ) : (
-
                   <div className="flex gap-2">
-
                     <input
                       value={coupon}
-                      onChange={(e) => {
+                      onChange={(
+                        e
+                      ) => {
                         setCoupon(
-                          e.target.value
+                          e.target
+                            .value
                         );
 
                         setCouponError(
@@ -1466,12 +1464,8 @@ useEffect(() => {
                         ? "Checking..."
                         : "Apply"}
                     </button>
-
                   </div>
-
                 )}
-
-                {/* Coupon Error */}
 
                 {couponError && (
                   <p className="text-xs text-red-600 mt-2">
@@ -1481,8 +1475,6 @@ useEffect(() => {
                   </p>
                 )}
 
-                {/* Coupon Success */}
-
                 {couponSuccess &&
                   appliedCoupon && (
                     <p className="text-xs text-green-700 mt-2">
@@ -1491,28 +1483,20 @@ useEffect(() => {
                       }
                     </p>
                   )}
-
               </div>
 
-              {/* =================================================
-                  DISCOUNT DETAILS
-              ================================================= */}
-
-              {discountLoading ===
-                false &&
+              {!discountLoading &&
                 availableDiscounts.some(
                   (discount) =>
                     discount.type ===
                     "SEASONAL"
                 ) && (
                   <div className="mt-4">
-
                     <p className="text-[10px] uppercase tracking-wider font-semibold text-[color:var(--gold-dark)] mb-2">
                       Active Offers
                     </p>
 
                     <div className="space-y-1">
-
                       {availableDiscounts
                         .filter(
                           (discount) =>
@@ -1533,31 +1517,23 @@ useEffect(() => {
                               <Tag className="w-3 h-3 text-[color:var(--gold-dark)]" />
 
                               <span>
-                                {discount.name ||
+                                {
+                                  discount.name ||
                                   getDiscountLabel(
                                     discount
-                                  )}
+                                  )
+                                }
                               </span>
                             </div>
                           )
                         )}
-
                     </div>
                   </div>
                 )}
 
-              {/* =================================================
-                  DIVIDER
-              ================================================= */}
-
               <div className="h-px bg-[color:var(--gold)]/30 my-4" />
 
-              {/* =================================================
-                  TOTAL
-              ================================================= */}
-
               <div className="flex justify-between font-bold text-lg text-[color:var(--espresso)]">
-
                 <span>
                   Total
                 </span>
@@ -1567,12 +1543,7 @@ useEffect(() => {
                     total
                   )}
                 </span>
-
               </div>
-
-              {/* =================================================
-                  CHECKOUT
-              ================================================= */}
 
               <Link
                 to="/checkout"
@@ -1580,7 +1551,6 @@ useEffect(() => {
               >
                 Proceed to Checkout
               </Link>
-
             </div>
           </div>
         )}
@@ -1602,7 +1572,6 @@ function Row({
 }) {
   return (
     <div className="flex justify-between text-sm py-1">
-
       <span className="text-[color:var(--muted-foreground)]">
         {l}
       </span>
@@ -1610,7 +1579,12 @@ function Row({
       <span className="text-[color:var(--espresso)]">
         {v}
       </span>
-
     </div>
   );
 }
+
+export const Route = createFileRoute(
+  "/cart"
+)({
+  component: CartPage,
+});
