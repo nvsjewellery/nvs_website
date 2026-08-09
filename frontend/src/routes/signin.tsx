@@ -1,5 +1,5 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { actions } from "@/lib/store";
 import { api } from "@/lib/api";
 import authPanel from "@/assets/auth-panel.jpg";
@@ -11,6 +11,7 @@ export const Route = createFileRoute("/signin")({
 
 function SignIn() {
   const nav = useNavigate();
+  const searchParams = useSearch({ strict: false }) as { resetToken?: string };
 
   const [mode, setMode] = useState<"login" | "register">("login");
   const [name, setName] = useState("");
@@ -36,6 +37,15 @@ function SignIn() {
   const [newPassword, setNewPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [isResetStep, setIsResetStep] = useState(false);
+
+  // Auto-open modal if user arrived via email reset link
+  useEffect(() => {
+    if (searchParams?.resetToken) {
+      setResetToken(searchParams.resetToken);
+      setIsResetStep(true);
+      setShowForgotModal(true);
+    }
+  }, [searchParams?.resetToken]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -63,7 +73,7 @@ function SignIn() {
   }
 
   /* =========================================================
-     HANDLE FORGOT PASSWORD (REQUEST RESET LINK/TOKEN)
+     HANDLE FORGOT PASSWORD (EMAIL REQUEST ONLY)
   ========================================================= */
   async function handleRequestReset(e: React.FormEvent) {
     e.preventDefault();
@@ -76,19 +86,12 @@ function SignIn() {
 
     try {
       const res = await api.forgotPassword(forgotEmail);
-
-      if (res.resetToken) {
-        setResetToken(res.resetToken);
-        setIsResetStep(true);
-        setForgotSuccessMsg("Reset token generated! Enter your new password below.");
-      } else {
-        setForgotSuccessMsg(
-          res.message || "Password reset link has been generated."
-        );
-      }
+      setForgotSuccessMsg(
+        res.message || "Please check your email inbox for password reset instructions."
+      );
     } catch (err: any) {
       setForgotError(
-        err?.message || "Failed to generate password reset link."
+        err?.message || "Failed to request password reset."
       );
     } finally {
       setForgotLoading(false);
@@ -348,7 +351,7 @@ function SignIn() {
             </div>
 
             {!isResetStep ? (
-              /* STEP 1: REQUEST RESET TOKEN */
+              /* STEP 1: REQUEST RESET EMAIL */
               <form onSubmit={handleRequestReset} className="mt-4 space-y-4">
                 <div>
                   <span className="text-xs label-caps text-[color:var(--gold-dark)]">
@@ -381,12 +384,12 @@ function SignIn() {
                     disabled={forgotLoading}
                     className="pill-gold w-full justify-center flex text-xs py-2.5 cursor-pointer disabled:opacity-60"
                   >
-                    {forgotLoading ? "Generating..." : "Generate Reset Link"}
+                    {forgotLoading ? "Sending Link..." : "Send Reset Link"}
                   </button>
                 </div>
               </form>
             ) : (
-              /* STEP 2: SET NEW PASSWORD WITH RETURNED TOKEN */
+              /* STEP 2: SET NEW PASSWORD WITH EMAIL TOKEN */
               <form onSubmit={handleResetPassword} className="mt-4 space-y-4">
                 <div>
                   <span className="text-xs label-caps text-[color:var(--gold-dark)]">
