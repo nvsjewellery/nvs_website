@@ -127,8 +127,13 @@ model Product {
   isDirectSterling Boolean @default(false)
   pieceCost        Float?
 
-  image  String        @default("")
-  status ProductStatus @default(Draft)
+  // Primary image — kept for backward compatibility
+image String @default("")
+
+// Product gallery — maximum 4 image URLs
+images String[] @default([])
+
+status ProductStatus @default(Draft)
 
   stock Int @default(0)
   sold  Int @default(0)
