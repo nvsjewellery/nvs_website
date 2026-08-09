@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useSearch } from "@tanstack/react-router";
 import { Layout } from "@/components/Layout";
 import { ProductCard } from "@/components/ProductCard";
@@ -9,6 +9,8 @@ interface CategoryPageProps {
   metal: "Gold" | "Silver";
   description: string;
 }
+
+const ITEMS_PER_PAGE = 50;
 
 // Helper function to safely extract subcategory string from product object
 function getSubCategory(p: Product): string {
@@ -38,6 +40,9 @@ export function CategoryPage({
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedSub, setSelectedSub] = useState(initialCat);
   const [loading, setLoading] = useState(true);
+  
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Sync selected subcategory if URL parameter changes
   useEffect(() => {
@@ -45,6 +50,11 @@ export function CategoryPage({
       setSelectedSub(searchParams.cat);
     }
   }, [searchParams?.cat]);
+
+  // Reset to page 1 whenever metal or subcategory changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [metal, selectedSub]);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,14 +85,29 @@ export function CategoryPage({
   }, [metal]);
 
   // Safely filter products avoiding undefined property errors
-  const filteredProducts =
-    selectedSub === "All"
+  const filteredProducts = useMemo(() => {
+    return selectedSub === "All"
       ? products
       : products.filter(
           (p) =>
             getSubCategory(p).toLowerCase() ===
             selectedSub.toLowerCase()
         );
+  }, [selectedSub, products]);
+
+  // Calculate pagination slices
+  const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const paginatedProducts = useMemo(() => {
+    return filteredProducts.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredProducts, startIndex]);
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
 
   return (
     <Layout>
@@ -154,8 +179,16 @@ export function CategoryPage({
           <main className="md:col-span-3">
             <div className="flex items-center justify-between mb-4">
               <p className="text-xs text-[color:var(--muted-foreground)]">
-                Showing {filteredProducts.length} product
-                {filteredProducts.length === 1 ? "" : "s"}
+                {filteredProducts.length > 0 ? (
+                  <>
+                    Showing {startIndex + 1}–
+                    {Math.min(startIndex + ITEMS_PER_PAGE, filteredProducts.length)}{" "}
+                    of {filteredProducts.length} product
+                    {filteredProducts.length === 1 ? "" : "s"}
+                  </>
+                ) : (
+                  "Showing 0 products"
+                )}
               </p>
             </div>
 
@@ -164,14 +197,54 @@ export function CategoryPage({
                 Loading products...
               </div>
             ) : filteredProducts.length > 0 ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-5">
-                {filteredProducts.map((product) => (
-                  <ProductCard
-                    key={product.id}
-                    p={product}
-                  />
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-5">
+                  {paginatedProducts.map((product) => (
+                    <ProductCard
+                      key={product.id}
+                      p={product}
+                    />
+                  ))}
+                </div>
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-2 mt-10">
+                    <button
+                      type="button"
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-[color:var(--border)] text-[color:var(--espresso)] hover:bg-[color:var(--cream)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition"
+                    >
+                      Previous
+                    </button>
+
+                    {Array.from({ length: totalPages }, (_, idx) => idx + 1).map((pageNum) => (
+                      <button
+                        key={pageNum}
+                        type="button"
+                        onClick={() => handlePageChange(pageNum)}
+                        className={`w-8 h-8 text-xs font-semibold rounded-lg cursor-pointer transition ${
+                          currentPage === pageNum
+                            ? "bg-[color:var(--gold)] text-white"
+                            : "border border-[color:var(--border)] text-[color:var(--espresso)] hover:bg-[color:var(--cream)]"
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    ))}
+
+                    <button
+                      type="button"
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-[color:var(--border)] text-[color:var(--espresso)] hover:bg-[color:var(--cream)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition"
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </>
             ) : (
               <div className="text-center py-12 bg-white border border-[color:var(--border)] rounded-2xl">
                 <p className="text-[color:var(--muted-foreground)] text-sm">
