@@ -6,7 +6,6 @@ import {
 
 import {
   useEffect,
-  useMemo,
   useState,
   type FormEvent,
 } from "react";
@@ -64,16 +63,6 @@ type RazorpayResponse = {
   razorpay_signature: string;
 };
 
-type BackendCoupon = {
-  id: string;
-  code: string;
-  name?: string | null;
-  type?: string;
-  target?: string;
-  kind?: "percent" | "flat";
-  value?: number;
-};
-
 type InitiatePaymentResponse = {
   success: boolean;
   message?: string;
@@ -83,18 +72,25 @@ type InitiatePaymentResponse = {
   subTotal?: number;
 
   /*
-   * Backend total discount.
+   * IMPORTANT:
    *
-   * This can contain:
-   * - seasonal
-   * - customer
-   * - coupon
+   * This is the TOTAL backend discount.
+   *
+   * It may contain:
+   *
+   * - seasonal discount
+   * - customer discount
+   * - coupon discount
    */
   discount?: number;
 
   total?: number;
 
-  coupon?: BackendCoupon | null;
+  coupon?: {
+    id: string;
+    code: string;
+    name?: string;
+  } | null;
 };
 
 type VerifyOrderResponse = {
@@ -109,7 +105,11 @@ type VerifyOrderResponse = {
     total: number;
   };
 
-  coupon?: BackendCoupon | null;
+  coupon?: {
+    id: string;
+    code: string;
+    name?: string;
+  } | null;
 };
 
 type RazorpayOptions = {
@@ -141,7 +141,7 @@ type RazorpayOptions = {
 };
 
 /* =========================================================
-   RAZORPAY GLOBAL
+   RAZORPAY GLOBAL TYPE
 ========================================================= */
 
 declare global {
@@ -164,393 +164,210 @@ const productCache: Record<
 > = {};
 
 /* =========================================================
-   HELPERS
-========================================================= */
-
-function calculateDiscountAmount(
-  vaAmount: number,
-  discount: Discount
-): number {
-  const va = Math.max(
-    Number(vaAmount || 0),
-    0
-  );
-
-  const value = Math.max(
-    Number(discount.value || 0),
-    0
-  );
-
-  if (va <= 0 || value <= 0) {
-    return 0;
-  }
-
-  if (discount.kind === "percent") {
-    return Math.min(
-      (va * value) / 100,
-      va
-    );
-  }
-
-  return Math.min(
-    value,
-    va
-  );
-}
-
-function isDiscountValid(
-  discount: Discount
-): boolean {
-  if (!discount) {
-    return false;
-  }
-
-  const now = new Date();
-
-  if (
-    discount.startDate &&
-    now < new Date(discount.startDate)
-  ) {
-    return false;
-  }
-
-  if (
-    discount.endDate &&
-    now > new Date(discount.endDate)
-  ) {
-    return false;
-  }
-
-  if (
-    discount.usageLimit !== null &&
-    discount.usageLimit !== undefined &&
-    Number(
-      discount.usageCount || 0
-    ) >= Number(
-      discount.usageLimit
-    )
-  ) {
-    return false;
-  }
-
-  return true;
-}
-
-function discountAppliesToProduct(
-  discount: Discount,
-  product: ProductItem
-): boolean {
-  if (!discount || !product) {
-    return false;
-  }
-
-  if (!isDiscountValid(discount)) {
-    return false;
-  }
-
-  /* -----------------------------------------
-     METAL
-  ----------------------------------------- */
-
-  if (
-    discount.metal &&
-    discount.metal !== product.metal
-  ) {
-    return false;
-  }
-
-  /* -----------------------------------------
-     PRODUCT
-  ----------------------------------------- */
-
-  if (
-    discount.target === "PRODUCT"
-  ) {
-    return (
-      Array.isArray(
-        discount.products
-      ) &&
-      discount.products.some(
-        (discountProduct) =>
-          discountProduct.id ===
-          product.id
-      )
-    );
-  }
-
-  /* -----------------------------------------
-     CATEGORY
-  ----------------------------------------- */
-
-  if (
-    discount.target === "CATEGORY"
-  ) {
-    if (!discount.category) {
-      return false;
-    }
-
-    const productCategory =
-      String(
-        product.category ??
-          product.sub ??
-          ""
-      )
-        .trim()
-        .toLowerCase();
-
-    const discountCategory =
-      String(
-        discount.category
-      )
-        .trim()
-        .toLowerCase();
-
-    return (
-      productCategory ===
-      discountCategory
-    );
-  }
-
-  return false;
-}
-
-/* =========================================================
-   CHECKOUT
+   CHECKOUT PAGE
 ========================================================= */
 
 export function Checkout() {
-  const user = useStore(
-    (s) => s.user
-  );
+  const user = useStore((s) => s.user);
+  const cart = useStore((s) => s.cart);
 
-  const cart = useStore(
-    (s) => s.cart
-  );
-
-  const navigate =
-    useNavigate();
+  const navigate = useNavigate();
 
   /* =======================================================
      CONTACT
   ======================================================= */
 
-  const [phone, setPhone] =
-    useState(
-      user?.phone || ""
-    );
+  const [phone, setPhone] = useState(
+    user?.phone || ""
+  );
 
   /* =======================================================
      APPLIED COUPON
   ======================================================= */
 
   /*
-   * Coupon is entered in Cart.
-   *
-   * Checkout DOES NOT provide a coupon input.
-   *
-   * The backend tells us about the coupon when
-   * payment is initiated.
+   * Coupon entry happens in the cart.
+   * Checkout only displays the coupon returned by the backend.
    */
-  const [
-    appliedCoupon,
-    setAppliedCoupon,
-  ] = useState<
-    BackendCoupon | null
-  >(null);
+  const [appliedCoupon, setAppliedCoupon] =
+    useState<string | null>(null);
+
+  /*
+   * Total discount returned by the backend.
+   * This may include customer, seasonal and coupon discounts.
+   */
+  const [backendDiscount, setBackendDiscount] =
+    useState(0);
+
+  const [backendSubtotal, setBackendSubtotal] =
+    useState<number | null>(null);
+
+  const [backendTotal, setBackendTotal] =
+    useState<number | null>(null);
 
   /* =======================================================
-     BACKEND PRICING
+     CUSTOMER DISCOUNT
   ======================================================= */
 
-  const [
-    backendSubtotal,
-    setBackendSubtotal,
-  ] = useState<number | null>(
-    null
-  );
+  const [customerDiscount, setCustomerDiscount] =
+    useState<Discount | null>(null);
 
   const [
-    backendTotal,
-    setBackendTotal,
-  ] = useState<number | null>(
-    null
-  );
-
-  const [
-    backendDiscount,
-    setBackendDiscount,
-  ] = useState(0);
-
-  /* =======================================================
-     AVAILABLE DISCOUNTS
-  ======================================================= */
-
-  const [
-    availableDiscounts,
-    setAvailableDiscounts,
-  ] = useState<Discount[]>(
-    []
-  );
-
-  const [
-    loadingDiscounts,
-    setLoadingDiscounts,
+    loadingCustomerDiscount,
+    setLoadingCustomerDiscount,
   ] = useState(false);
 
   /* =======================================================
      PRODUCTS
   ======================================================= */
 
-  const [
-    productsMap,
-    setProductsMap,
-  ] = useState<
-    Record<string, ProductItem>
-  >(productCache);
+  const [productsMap, setProductsMap] =
+    useState<Record<string, ProductItem>>(
+      productCache
+    );
 
-  const [
-    loadingProducts,
-    setLoadingProducts,
-  ] = useState(false);
+  const [loadingProducts, setLoadingProducts] =
+    useState(false);
 
   /* =======================================================
      ADDRESSES
   ======================================================= */
 
-  const [
-    addresses,
-    setAddresses,
-  ] = useState<Address[]>(
-    []
-  );
+  const [addresses, setAddresses] =
+    useState<Address[]>([]);
 
-  const [
-    selectedAddressId,
-    setSelectedAddressId,
-  ] = useState("");
+  const [selectedAddressId, setSelectedAddressId] =
+    useState("");
 
-  const [
-    loadingAddresses,
-    setLoadingAddresses,
-  ] = useState(false);
+  const [loadingAddresses, setLoadingAddresses] =
+    useState(false);
 
   /* =======================================================
      NEW ADDRESS
   ======================================================= */
 
-  const [
-    showAddForm,
-    setShowAddForm,
-  ] = useState(false);
+  const [showAddForm, setShowAddForm] =
+    useState(false);
 
-  const [
-    label,
-    setLabel,
-  ] = useState("Home");
+  const [label, setLabel] =
+    useState("Home");
 
-  const [
-    addressLine,
-    setAddressLine,
-  ] = useState("");
+  const [addressLine, setAddressLine] =
+    useState("");
 
-  const [
-    city,
-    setCity,
-  ] = useState("");
+  const [city, setCity] =
+    useState("");
 
-  const [
-    state,
-    setState,
-  ] = useState("");
+  const [state, setState] =
+    useState("");
 
-  const [
-    pincode,
-    setPincode,
-  ] = useState("");
+  const [pincode, setPincode] =
+    useState("");
 
   /* =======================================================
      PAYMENT
   ======================================================= */
 
-  const [
-    loading,
-    setLoading,
-  ] = useState(false);
+  const [loading, setLoading] =
+    useState(false);
 
   /* =======================================================
-     PHONE SYNC
+     USER PHONE SYNC
   ======================================================= */
 
   useEffect(() => {
-    if (
-      user?.phone &&
-      !phone
-    ) {
+    if (user?.phone && !phone) {
       setPhone(user.phone);
     }
   }, [user, phone]);
 
   /* =======================================================
-     LOAD AVAILABLE DISCOUNTS
+     LOAD CUSTOMER DISCOUNT
   ======================================================= */
 
   useEffect(() => {
     if (!user) {
-      setAvailableDiscounts([]);
+      setCustomerDiscount(null);
       return;
     }
 
-    let mounted = true;
+    let isMounted = true;
 
-    async function loadDiscounts() {
-      setLoadingDiscounts(true);
+    async function loadCustomerDiscount() {
+      setLoadingCustomerDiscount(true);
 
       try {
+        /*
+         * IMPORTANT:
+         *
+         * discountsApi.getAvailable()
+         * already calls:
+         *
+         * GET /discounts/available
+         *
+         * with the authentication token.
+         */
+
         const discounts =
           await discountsApi.getAvailable();
 
-        if (!mounted) {
+        if (!isMounted) {
           return;
         }
 
-        setAvailableDiscounts(
-          Array.isArray(discounts)
-            ? discounts
-            : []
+        /*
+         * Find the discount assigned specifically
+         * to this customer.
+         */
+
+        const customerDiscounts =
+          discounts.filter(
+            (discount) =>
+              discount.type === "CUSTOMER" &&
+              discount.target === "CUSTOMER"
+          );
+
+        /*
+         * Usually there should be only one.
+         *
+         * If multiple exist, keep the first one
+         * returned by backend.
+         */
+
+        setCustomerDiscount(
+          customerDiscounts[0] || null
         );
       } catch (error) {
         console.error(
-          "Failed to load available discounts:",
+          "Failed to load customer discount:",
           error
         );
 
-        if (mounted) {
-          setAvailableDiscounts([]);
+        if (isMounted) {
+          setCustomerDiscount(null);
         }
       } finally {
-        if (mounted) {
-          setLoadingDiscounts(false);
+        if (isMounted) {
+          setLoadingCustomerDiscount(false);
         }
       }
     }
 
-    loadDiscounts();
+    loadCustomerDiscount();
 
     return () => {
-      mounted = false;
+      isMounted = false;
     };
   }, [user]);
 
   /* =======================================================
-     LOAD RAZORPAY
+     LOAD RAZORPAY SDK
   ======================================================= */
 
   useEffect(() => {
     if (
-      typeof window !==
-        "undefined" &&
-      typeof window.Razorpay ===
-        "function"
+      typeof window !== "undefined" &&
+      typeof window.Razorpay === "function"
     ) {
       return;
     }
@@ -565,9 +382,7 @@ export function Checkout() {
     }
 
     const script =
-      document.createElement(
-        "script"
-      );
+      document.createElement("script");
 
     script.src =
       "https://checkout.razorpay.com/v1/checkout.js";
@@ -586,9 +401,7 @@ export function Checkout() {
       );
     };
 
-    document.body.appendChild(
-      script
-    );
+    document.body.appendChild(script);
   }, []);
 
   /* =======================================================
@@ -596,35 +409,25 @@ export function Checkout() {
   ======================================================= */
 
   const cartKeys = cart
-    .map(
-      (item) =>
-        item.productId
-    )
+    .map((item) => item.productId)
     .join(",");
 
   /* =======================================================
-     LOAD PRODUCTS
+     LOAD CART PRODUCTS
   ======================================================= */
 
   useEffect(() => {
-    let mounted = true;
+    let isMounted = true;
 
-    async function loadProducts() {
-      const missingIds =
-        cart
-          .map(
-            (item) =>
-              item.productId
-          )
-          .filter(
-            (id) =>
-              !productCache[id]
-          );
+    async function loadCartProducts() {
+      const missingIds = cart
+        .map((item) => item.productId)
+        .filter(
+          (id) => !productCache[id]
+        );
 
-      if (
-        missingIds.length === 0
-      ) {
-        if (mounted) {
+      if (missingIds.length === 0) {
+        if (isMounted) {
           setProductsMap({
             ...productCache,
           });
@@ -636,20 +439,20 @@ export function Checkout() {
       setLoadingProducts(true);
 
       try {
+        const promises =
+          missingIds.map((id) =>
+            productsApi
+              .getById(id)
+              .catch(() => null)
+          );
+
         const results =
           await Promise.all(
-            missingIds.map(
-              (id) =>
-                productsApi
-                  .getById(id)
-                  .catch(
-                    () => null
-                  )
-            )
+            promises
           );
 
         results.forEach(
-          (product) => {
+          (product: ProductItem | null) => {
             if (
               product &&
               product.id
@@ -681,7 +484,7 @@ export function Checkout() {
           }
         );
 
-        if (mounted) {
+        if (isMounted) {
           setProductsMap({
             ...productCache,
           });
@@ -692,23 +495,21 @@ export function Checkout() {
           error
         );
       } finally {
-        if (mounted) {
-          setLoadingProducts(
-            false
-          );
+        if (isMounted) {
+          setLoadingProducts(false);
         }
       }
     }
 
-    loadProducts();
+    loadCartProducts();
 
     return () => {
-      mounted = false;
+      isMounted = false;
     };
   }, [cartKeys]);
 
   /* =======================================================
-     LOAD ADDRESSES
+     LOAD SAVED ADDRESSES
   ======================================================= */
 
   useEffect(() => {
@@ -716,7 +517,7 @@ export function Checkout() {
       return;
     }
 
-    let mounted = true;
+    let isMounted = true;
 
     async function loadAddresses() {
       setLoadingAddresses(true);
@@ -725,7 +526,7 @@ export function Checkout() {
         const data =
           await addressesApi.getAll();
 
-        if (!mounted) {
+        if (!isMounted) {
           return;
         }
 
@@ -735,12 +536,11 @@ export function Checkout() {
           const defaultAddress =
             data.find(
               (address) =>
-                address.isDefault ===
-                true
+                address.isDefault === true
             );
 
           setSelectedAddressId(
-            defaultAddress?.id ??
+            defaultAddress?.id ||
               data[0].id
           );
         }
@@ -750,10 +550,8 @@ export function Checkout() {
           error
         );
       } finally {
-        if (mounted) {
-          setLoadingAddresses(
-            false
-          );
+        if (isMounted) {
+          setLoadingAddresses(false);
         }
       }
     }
@@ -761,7 +559,7 @@ export function Checkout() {
     loadAddresses();
 
     return () => {
-      mounted = false;
+      isMounted = false;
     };
   }, [user]);
 
@@ -811,12 +609,10 @@ export function Checkout() {
             pincode.trim(),
         });
 
-      setAddresses(
-        (previous) => [
-          ...previous,
-          newAddress,
-        ]
-      );
+      setAddresses((previous) => [
+        ...previous,
+        newAddress,
+      ]);
 
       setSelectedAddressId(
         newAddress.id
@@ -844,7 +640,7 @@ export function Checkout() {
   }
 
   /* =======================================================
-     BUILD ITEMS
+     BUILD CART ITEMS
   ======================================================= */
 
   const items = cart.flatMap(
@@ -868,13 +664,13 @@ export function Checkout() {
   );
 
   /* =======================================================
-     FRONTEND SUBTOTAL
+     FRONTEND CALCULATED SUBTOTAL
   ======================================================= */
 
   const calculatedSubtotal =
     items.reduce(
       (sum, item) => {
-        const weight =
+        const weightVal =
           Number(
             item.p.weight ??
               item.p.grossWeight ??
@@ -883,12 +679,12 @@ export function Checkout() {
 
         const breakdown =
           computeBreakdown(
-            weight,
+            weightVal,
             item.p.purity ||
               "22K"
           );
 
-        const price =
+        const itemPrice =
           breakdown?.total
             ? breakdown.total
             : Number(
@@ -897,7 +693,7 @@ export function Checkout() {
 
         return (
           sum +
-          price *
+          itemPrice *
             item.qty
         );
       },
@@ -905,253 +701,96 @@ export function Checkout() {
     );
 
   /* =======================================================
-     CART VA
+     CART VA TOTAL
   ======================================================= */
 
-  const cartVaTotal =
-    items.reduce(
-      (sum, item) => {
-        const va =
-          Number(
-            item.p.va ??
-              item.p.making ??
-              0
-          );
+  /*
+   * Customer discounts apply ONLY to VA /
+   * making charges.
+   *
+   * They do NOT apply to the complete
+   * jewellery price.
+   */
 
-        return (
-          sum +
-          va *
-            item.qty
+  const cartVaTotal = items.reduce(
+    (sum, item) => {
+      const vaAmount =
+        Number(
+          item.p.va ??
+            item.p.making ??
+            0
         );
-      },
-      0
-    );
 
-  /* =======================================================
-     DISPLAY METAL + VA
-  ======================================================= */
-
-  const displayVaTotal =
-    cartVaTotal;
-
-  const displayMetalTotal =
-    Math.max(
-      calculatedSubtotal -
-        displayVaTotal,
-      0
-    );
-
-  /* =======================================================
-     BEST SEASONAL / PRODUCT DISCOUNTS
-  ======================================================= */
-
-  const productDiscountApplications =
-    useMemo(() => {
-      const applications: Array<{
-        discount: Discount;
-        product: ProductItem;
-        amount: number;
-        qty: number;
-      }> = [];
-
-      for (const item of items) {
-        const applicable =
-          availableDiscounts.filter(
-            (discount) =>
-              discount.type ===
-                "SEASONAL" &&
-              (
-                discount.target ===
-                  "PRODUCT" ||
-                discount.target ===
-                  "CATEGORY"
-              ) &&
-              discountAppliesToProduct(
-                discount,
-                item.p
-              )
-          );
-
-        if (
-          applicable.length ===
-          0
-        ) {
-          continue;
-        }
-
-        let best:
-          | {
-              discount: Discount;
-              amount: number;
-            }
-          | null = null;
-
-        for (const discount of applicable) {
-          const va =
-            Number(
-              item.p.va ??
-                item.p.making ??
-                0
-            );
-
-          const amount =
-            calculateDiscountAmount(
-              va,
-              discount
-            );
-
-          if (
-            amount > 0 &&
-            (
-              !best ||
-              amount >
-                best.amount
-            )
-          ) {
-            best = {
-              discount,
-              amount,
-            };
-          }
-        }
-
-        if (best) {
-          applications.push({
-            discount:
-              best.discount,
-
-            product: item.p,
-
-            amount:
-              best.amount *
-              item.qty,
-
-            qty: item.qty,
-          });
-        }
-      }
-
-      return applications;
-    }, [
-      availableDiscounts,
-      items,
-    ]);
-
-  /* =======================================================
-     SEASONAL DISCOUNT TOTAL
-  ======================================================= */
-
-  const seasonalDiscountAmount =
-    productDiscountApplications.reduce(
-      (
-        sum,
-        application
-      ) =>
+      return (
         sum +
-        application.amount,
-      0
-    );
-
-  /* =======================================================
-     GROUP SEASONAL DISCOUNTS
-  ======================================================= */
-
-  const seasonalDiscountGroups =
-    useMemo(() => {
-      const map =
-        new Map<
-          string,
-          {
-            discount: Discount;
-            amount: number;
-            products: string[];
-          }
-        >();
-
-      for (
-        const application of
-          productDiscountApplications
-      ) {
-        const id =
-          application.discount
-            .id;
-
-        const existing =
-          map.get(id);
-
-        if (existing) {
-          existing.amount +=
-            application.amount;
-
-          existing.products.push(
-            application.product.name
-          );
-        } else {
-          map.set(id, {
-            discount:
-              application.discount,
-
-            amount:
-              application.amount,
-
-            products: [
-              application.product
-                .name,
-            ],
-          });
-        }
-      }
-
-      return Array.from(
-        map.values()
+        vaAmount *
+          item.qty
       );
-    }, [
-      productDiscountApplications,
-    ]);
+    },
+    0
+  );
 
   /* =======================================================
-     CUSTOMER DISCOUNT
+     PRICE COMPONENTS
   ======================================================= */
 
-  const customerDiscount =
-    availableDiscounts.find(
-      (discount) =>
-        discount.type ===
-          "CUSTOMER" &&
-        discount.target ===
-          "CUSTOMER"
-    ) ?? null;
+  /*
+   * Customer discounts apply only to VA / making charges.
+   */
+  const displayVaTotal = cartVaTotal;
+
+  /*
+   * Display-only metal value. The backend remains the source
+   * of truth for the final payable amount.
+   */
+  const displayMetalTotal = Math.max(
+    calculatedSubtotal -
+      displayVaTotal,
+    0
+  );
+
+  /* =======================================================
+     CUSTOMER DISCOUNT AMOUNT
+  ======================================================= */
 
   const customerDiscountAmount =
     customerDiscount &&
     cartVaTotal > 0
-      ? calculateDiscountAmount(
-          cartVaTotal,
-          customerDiscount
-        )
+      ? customerDiscount.kind ===
+        "percent"
+        ? Math.min(
+            (cartVaTotal *
+              Number(
+                customerDiscount.value
+              )) /
+              100,
+            cartVaTotal
+          )
+        : Math.min(
+            Number(
+              customerDiscount.value
+            ),
+            cartVaTotal
+          )
       : 0;
 
   /* =======================================================
-     FRONTEND ESTIMATED TOTAL
+     DISPLAY TOTAL
   ======================================================= */
 
   /*
-   * Important:
+   * Before backend payment initiation:
    *
-   * Seasonal/product discounts and customer discounts
-   * are shown separately.
+   * We can show an estimated total after
+   * the customer's assigned discount.
    *
-   * The backend remains the final authority.
+   * Backend remains the source of truth.
    */
 
-  const estimatedDiscount =
-    seasonalDiscountAmount +
-    customerDiscountAmount;
-
-  const estimatedTotal =
+  const estimatedCustomerTotal =
     Math.max(
       calculatedSubtotal -
-        estimatedDiscount,
+        customerDiscountAmount,
       0
     );
 
@@ -1161,20 +800,7 @@ export function Checkout() {
 
   const displayTotal =
     backendTotal ??
-    estimatedTotal;
-
-  /* =======================================================
-     DISPLAY DISCOUNT TOTAL
-  ======================================================= */
-
-  const displayDiscount =
-    backendTotal !== null
-      ? Math.max(
-          displaySubtotal -
-            displayTotal,
-          0
-        )
-      : estimatedDiscount;
+    estimatedCustomerTotal;
 
   /* =======================================================
      PLACE ORDER
@@ -1185,9 +811,9 @@ export function Checkout() {
   ) {
     event.preventDefault();
 
-    /* -----------------------------------------
+    /* -------------------------------------------------------
        PHONE
-    ----------------------------------------- */
+    ------------------------------------------------------- */
 
     if (!phone.trim()) {
       alert(
@@ -1209,9 +835,9 @@ export function Checkout() {
       return;
     }
 
-    /* -----------------------------------------
+    /* -------------------------------------------------------
        ADDRESS
-    ----------------------------------------- */
+    ------------------------------------------------------- */
 
     if (!selectedAddressId) {
       alert(
@@ -1221,9 +847,9 @@ export function Checkout() {
       return;
     }
 
-    /* -----------------------------------------
+    /* -------------------------------------------------------
        CART
-    ----------------------------------------- */
+    ------------------------------------------------------- */
 
     if (items.length === 0) {
       alert(
@@ -1233,9 +859,7 @@ export function Checkout() {
       return;
     }
 
-    if (
-      calculatedSubtotal <= 0
-    ) {
+    if (calculatedSubtotal <= 0) {
       alert(
         "Unable to calculate order total."
       );
@@ -1246,17 +870,17 @@ export function Checkout() {
     setLoading(true);
 
     try {
-      /* =======================================
+      /* =====================================================
          SAVE PHONE
-      ======================================= */
+      ===================================================== */
 
       await api.updateProfile({
         phone: phone.trim(),
       });
 
-      /* =======================================
-         REFRESH AUTH
-      ======================================= */
+      /* =====================================================
+         REFRESH AUTH USER
+      ===================================================== */
 
       if (
         typeof actions.checkAuth ===
@@ -1265,22 +889,16 @@ export function Checkout() {
         await actions.checkAuth();
       }
 
-      /* =======================================
+      /* =====================================================
+         STEP 1
          INITIATE PAYMENT
-      ======================================= */
+      ===================================================== */
 
       /*
-       * IMPORTANT:
-       *
-       * Checkout does NOT ask for a coupon.
-       *
-       * The backend decides the final pricing.
-       *
-       * If the Cart has an applied coupon and your
-       * backend stores/reads it, the response will
-       * contain paymentResponse.coupon.
+       * Coupon entry is handled in the cart.
+       * Checkout sends no new coupon input.
+       * The backend remains the source of truth for final pricing.
        */
-
       const paymentResponse =
         (await api.post(
           "/orders/initiate-payment",
@@ -1296,9 +914,9 @@ export function Checkout() {
         );
       }
 
-      /* =======================================
+      /* =====================================================
          RAZORPAY ORDER
-      ======================================= */
+      ===================================================== */
 
       const razorpayOrder =
         paymentResponse.razorpayOrder;
@@ -1309,9 +927,9 @@ export function Checkout() {
         );
       }
 
-      /* =======================================
+      /* =====================================================
          BACKEND PRICING
-      ======================================= */
+      ===================================================== */
 
       if (
         typeof paymentResponse.subTotal ===
@@ -1331,6 +949,13 @@ export function Checkout() {
         );
       }
 
+      /*
+       * IMPORTANT:
+       *
+       * Backend discount is the complete discount,
+       * not coupon-only discount.
+       */
+
       if (
         typeof paymentResponse.discount ===
         "number"
@@ -1340,21 +965,15 @@ export function Checkout() {
         );
       }
 
-      /* =======================================
-         BACKEND COUPON
-      ======================================= */
-
-      if (
-        paymentResponse.coupon
-      ) {
+      if (paymentResponse.coupon?.code) {
         setAppliedCoupon(
-          paymentResponse.coupon
+          paymentResponse.coupon.code
         );
       }
 
-      /* =======================================
-         RAZORPAY SDK
-      ======================================= */
+      /* =====================================================
+         CHECK RAZORPAY SDK
+      ===================================================== */
 
       if (
         typeof window.Razorpay !==
@@ -1365,163 +984,167 @@ export function Checkout() {
         );
       }
 
-      /* =======================================
+      /* =====================================================
          RAZORPAY OPTIONS
-      ======================================= */
+      ===================================================== */
 
-      const options: RazorpayOptions =
-        {
-          key:
-            "rzp_test_TIZNsDeMd9h0Dx",
+      const options: RazorpayOptions = {
+        /*
+         * TEST KEY
+         *
+         * Replace with live key for production.
+         */
 
-          /*
-           * NEVER calculate this amount
-           * manually on frontend.
-           *
-           * Use backend Razorpay amount.
-           */
+        key:
+          "rzp_test_TIZNsDeMd9h0Dx",
 
-          amount:
-            razorpayOrder.amount,
+        /*
+         * IMPORTANT:
+         *
+         * This comes directly from backend.
+         */
 
-          currency:
-            razorpayOrder.currency,
+        amount:
+          razorpayOrder.amount,
 
-          order_id:
-            razorpayOrder.id,
+        currency:
+          razorpayOrder.currency,
 
-          name:
-            "NVS Jewellery",
+        order_id:
+          razorpayOrder.id,
 
-          description:
-            "Jewellery Purchase Checkout",
+        name:
+          "NVS Jewellery",
 
-          image:
-            "/favicon.ico",
+        description:
+          "Jewellery Purchase Checkout",
 
-          /* ===================================
-             PAYMENT SUCCESS
-          =================================== */
+        image:
+          "/favicon.ico",
 
-          handler:
-            async function (
-              response
-            ) {
-              try {
-                const verifyPayload: Record<
-                  string,
-                  unknown
-                > = {
-                  razorpay_order_id:
-                    response.razorpay_order_id,
+        /* ===================================================
+           PAYMENT SUCCESS
+        =================================================== */
 
-                  razorpay_payment_id:
-                    response.razorpay_payment_id,
+        handler:
+          async function (
+            response
+          ) {
+            try {
+              /* =============================================
+                 VERIFY PAYLOAD
+              ============================================= */
 
-                  razorpay_signature:
-                    response.razorpay_signature,
+              const verifyPayload: Record<
+                string,
+                unknown
+              > = {
+                razorpay_order_id:
+                  response.razorpay_order_id,
 
-                  addressId:
-                    selectedAddressId,
+                razorpay_payment_id:
+                  response.razorpay_payment_id,
 
-                  phone:
-                    phone.trim(),
-                };
+                razorpay_signature:
+                  response.razorpay_signature,
 
-                /*
-                 * We intentionally do not send
-                 * a coupon from Checkout because
-                 * coupon application happens in Cart.
-                 *
-                 * Backend should derive/validate
-                 * the applied coupon.
-                 */
+                addressId:
+                  selectedAddressId,
 
-                const result =
-                  (await api.post(
-                    "/orders/verify-and-place",
-                    verifyPayload
-                  )) as VerifyOrderResponse;
+                phone:
+                  phone.trim(),
+              };
 
-                if (
-                  !result.success
-                ) {
-                  throw new Error(
-                    result.message ||
-                      "Order placement failed."
-                  );
-                }
+              /* =============================================
+                 STEP 2
+                 VERIFY + PLACE ORDER
+              ============================================= */
 
-                /* ==============================
-                   CLEAR CART
-                ============================== */
+              const result =
+                (await api.post(
+                  "/orders/verify-and-place",
+                  verifyPayload
+                )) as VerifyOrderResponse;
 
-                actions.clearCart();
-
-                /* ==============================
-                   ACCOUNT
-                ============================== */
-
-                navigate({
-                  to: "/account",
-                });
-              } catch (error) {
-                console.error(
-                  "Payment verification/order placement failed:",
-                  error
+              if (
+                !result.success
+              ) {
+                throw new Error(
+                  result.message ||
+                    "Order placement failed."
                 );
-
-                alert(
-                  error instanceof Error
-                    ? error.message
-                    : "Payment verification failed. Please contact support."
-                );
-              } finally {
-                setLoading(false);
               }
+
+              /* =============================================
+                 CLEAR LOCAL CART
+              ============================================= */
+
+              actions.clearCart();
+
+              /* =============================================
+                 GO TO ACCOUNT
+              ============================================= */
+
+              navigate({
+                to: "/account",
+              });
+            } catch (error) {
+              console.error(
+                "Payment verification/order placement failed:",
+                error
+              );
+
+              alert(
+                error instanceof Error
+                  ? error.message
+                  : "Payment verification failed. Please contact support."
+              );
+            } finally {
+              setLoading(false);
+            }
+          },
+
+        /* ===================================================
+           PREFILL
+        =================================================== */
+
+        prefill: {
+          name:
+            user?.name ||
+            "Customer",
+
+          email:
+            user?.email ||
+            "customer@nvsjewellery.com",
+
+          contact:
+            phone.trim(),
+        },
+
+        /* ===================================================
+           THEME
+        =================================================== */
+
+        theme: {
+          color:
+            "#B8860B",
+        },
+
+        /* ===================================================
+           MODAL
+        =================================================== */
+
+        modal: {
+          ondismiss:
+            function () {
+              setLoading(false);
             },
+        },
+      };
 
-          /* ===================================
-             PREFILL
-          =================================== */
-
-          prefill: {
-            name:
-              user?.name ||
-              "Customer",
-
-            email:
-              user?.email ||
-              "customer@nvsjewellery.com",
-
-            contact:
-              phone.trim(),
-          },
-
-          /* ===================================
-             THEME
-          =================================== */
-
-          theme: {
-            color:
-              "#B8860B",
-          },
-
-          /* ===================================
-             MODAL
-          =================================== */
-
-          modal: {
-            ondismiss:
-              () => {
-                setLoading(false);
-              },
-          },
-        };
-
-      /* =======================================
+      /* =====================================================
          OPEN RAZORPAY
-      ======================================= */
+      ===================================================== */
 
       const razorpay =
         new window.Razorpay(
@@ -1553,9 +1176,9 @@ export function Checkout() {
     <Layout>
       <div className="max-w-7xl mx-auto px-4 py-10">
 
-        {/* =========================================
+        {/* =================================================
             HEADER
-        ========================================= */}
+        ================================================= */}
 
         <h1 className="font-serif text-4xl md:text-5xl text-[color:var(--espresso)]">
           Checkout
@@ -1563,9 +1186,9 @@ export function Checkout() {
 
         <OrnamentalDivider />
 
-        {/* =========================================
-            LOADING / EMPTY
-        ========================================= */}
+        {/* =================================================
+            LOADING / EMPTY CART
+        ================================================= */}
 
         {loadingProducts &&
         items.length === 0 ? (
@@ -1596,10 +1219,9 @@ export function Checkout() {
 
           </div>
         ) : (
-
-          /* =========================================
+          /* =================================================
              CHECKOUT FORM
-          ========================================= */
+          ================================================= */
 
           <form
             onSubmit={
@@ -1608,15 +1230,15 @@ export function Checkout() {
             className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-8 mt-6"
           >
 
-            {/* =======================================
-                LEFT SIDE
-            ======================================= */}
+            {/* =============================================
+               LEFT SIDE
+            ============================================= */}
 
             <div className="space-y-6">
 
-              {/* ===================================
-                  PRODUCTS
-              =================================== */}
+              {/* =========================================
+                 PRODUCT DETAILS
+              ========================================= */}
 
               <div className="bg-white border border-[color:var(--border)] rounded-2xl p-6 shadow-xs">
 
@@ -1628,25 +1250,29 @@ export function Checkout() {
 
                   {items.map(
                     (item) => {
-                      const weight =
+                      const weightVal =
                         Number(
-                          item.p.weight ??
-                            item.p.grossWeight ??
+                          item.p
+                            .weight ??
+                            item.p
+                              .grossWeight ??
                             0
                         );
 
                       const breakdown =
                         computeBreakdown(
-                          weight,
-                          item.p.purity ||
+                          weightVal,
+                          item.p
+                            .purity ||
                             "22K"
                         );
 
-                      const price =
+                      const itemPrice =
                         breakdown?.total
                           ? breakdown.total
                           : Number(
-                              item.p.price ||
+                              item.p
+                                .price ||
                                 0
                             );
 
@@ -1657,6 +1283,8 @@ export function Checkout() {
                           }
                           className="pt-4 first:pt-0 flex items-center justify-between gap-4"
                         >
+
+                          {/* PRODUCT */}
 
                           <div className="flex items-center gap-4 min-w-0">
 
@@ -1688,21 +1316,29 @@ export function Checkout() {
                               </h4>
 
                               <p className="text-xs text-[color:var(--muted-foreground)] mt-0.5">
+
                                 Weight:{" "}
+
                                 <span className="font-semibold text-[color:var(--espresso)]">
-                                  {weight}
+                                  {
+                                    weightVal
+                                  }
                                   g
                                 </span>
 
                                 {" · "}
 
                                 Purity:{" "}
+
                                 <span className="font-semibold text-[color:var(--espresso)]">
                                   {
-                                    item.p
-                                      .purity
+                                    item
+                                      .p
+                                      .purity ||
+                                    "22K"
                                   }
                                 </span>
+
                               </p>
 
                               <p className="text-xs text-[color:var(--gold-dark)] font-semibold mt-1">
@@ -1713,13 +1349,16 @@ export function Checkout() {
                               </p>
 
                             </div>
+
                           </div>
+
+                          {/* ITEM PRICE */}
 
                           <div className="text-right shrink-0">
 
                             <p className="font-bold text-base text-[color:var(--espresso)]">
                               {formatINR(
-                                price *
+                                itemPrice *
                                   item.qty
                               )}
                             </p>
@@ -1734,9 +1373,9 @@ export function Checkout() {
                 </div>
               </div>
 
-              {/* ===================================
-                  CONTACT
-              =================================== */}
+              {/* =========================================
+                 CONTACT NUMBER
+              ========================================= */}
 
               <div className="bg-white border border-[color:var(--border)] rounded-2xl p-6 shadow-xs">
 
@@ -1762,7 +1401,8 @@ export function Checkout() {
                     value={phone}
                     onChange={(event) =>
                       setPhone(
-                        event.target.value
+                        event.target
+                          .value
                       )
                     }
                     className="mt-1 w-full border border-[color:var(--border)] rounded-lg px-3 py-2.5 text-sm bg-white focus:border-[color:var(--gold)] outline-none"
@@ -1770,12 +1410,11 @@ export function Checkout() {
                   />
 
                 </label>
-
               </div>
 
-              {/* ===================================
-                  ADDRESS
-              =================================== */}
+              {/* =========================================
+                 SHIPPING ADDRESS
+              ========================================= */}
 
               <div className="bg-white border border-[color:var(--border)] rounded-2xl p-6 shadow-xs">
 
@@ -1804,13 +1443,15 @@ export function Checkout() {
                 </div>
 
                 {loadingAddresses ? (
-
                   <p className="text-xs text-[color:var(--muted-foreground)]">
                     Loading saved
                     addresses...
                   </p>
-
                 ) : showAddForm ? (
+
+                  /* =======================================
+                     ADD ADDRESS
+                  ======================================= */
 
                   <div className="space-y-3 pt-2 border-t border-[color:var(--border)]">
 
@@ -1821,9 +1462,7 @@ export function Checkout() {
                         "Work",
                         "Other",
                       ].map(
-                        (
-                          addressLabel
-                        ) => (
+                        (addressLabel) => (
                           <button
                             type="button"
                             key={
@@ -1910,7 +1549,8 @@ export function Checkout() {
                           event
                         ) => {
                           const value =
-                            event.target.value
+                            event.target
+                              .value
                               .replace(
                                 /\D/g,
                                 ""
@@ -1958,8 +1598,11 @@ export function Checkout() {
 
                   </div>
 
-                ) : addresses.length >
-                  0 ? (
+                ) : addresses.length > 0 ? (
+
+                  /* =======================================
+                     SAVED ADDRESSES
+                  ======================================= */
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
@@ -2006,17 +1649,22 @@ export function Checkout() {
                           </p>
 
                           <p className="text-xs text-[color:var(--muted-foreground)] mt-0.5">
+
                             {
                               address.city
                             }
                             ,{" "}
+
                             {
                               address.state
                             }{" "}
+
                             —{" "}
+
                             {
                               address.pincode
                             }
+
                           </p>
 
                         </div>
@@ -2026,6 +1674,10 @@ export function Checkout() {
                   </div>
 
                 ) : (
+
+                  /* =======================================
+                     NO ADDRESSES
+                  ======================================= */
 
                   <p className="text-xs text-[color:var(--muted-foreground)]">
                     No saved addresses
@@ -2037,11 +1689,10 @@ export function Checkout() {
                 )}
 
               </div>
-
             </div>
 
             {/* =============================================
-                RIGHT SIDE
+               RIGHT SIDE
             ============================================= */}
 
             <div className="bg-[color:var(--panel)] rounded-2xl p-6 h-fit border border-[color:var(--border)] shadow-xs">
@@ -2058,25 +1709,29 @@ export function Checkout() {
 
                 {items.map(
                   (item) => {
-                    const weight =
+                    const weightVal =
                       Number(
-                        item.p.weight ??
-                          item.p.grossWeight ??
+                        item.p
+                          .weight ??
+                          item.p
+                            .grossWeight ??
                           0
                       );
 
                     const breakdown =
                       computeBreakdown(
-                        weight,
-                        item.p.purity ||
+                        weightVal,
+                        item.p
+                          .purity ||
                           "22K"
                       );
 
-                    const price =
+                    const itemPrice =
                       breakdown?.total
                         ? breakdown.total
                         : Number(
-                            item.p.price ||
+                            item.p
+                              .price ||
                               0
                           );
 
@@ -2098,24 +1753,30 @@ export function Checkout() {
                           </p>
 
                           <p className="text-xs text-[color:var(--muted-foreground)]">
+
                             {
-                              weight
+                              weightVal
                             }g ·{" "}
+
                             {
                               item.p
-                                .purity
+                                .purity ||
+                              "22K"
                             }{" "}
+
                             ×{" "}
+
                             {
                               item.qty
                             }
+
                           </p>
 
                         </div>
 
                         <span className="font-semibold shrink-0">
                           {formatINR(
-                            price *
+                            itemPrice *
                               item.qty
                           )}
                         </span>
@@ -2127,342 +1788,201 @@ export function Checkout() {
 
               </div>
 
+              {/* =========================================
+                  PRICING DIVIDER
+              ========================================= */}
+
               <div className="h-px bg-[color:var(--gold)]/30 my-4" />
 
               {/* =========================================
-                  PRICE BREAKDOWN
+                  SUBTOTAL
               ========================================= */}
 
-              <div className="space-y-2">
-
-                <div className="flex justify-between text-sm">
-
-                  <span className="text-[color:var(--muted-foreground)]">
-                    Cost of Metal
-                  </span>
-
-                  <span className="text-[color:var(--espresso)]">
-                    {formatINR(
-                      displayMetalTotal
-                    )}
-                  </span>
-
-                </div>
-
-                <div className="flex justify-between text-sm">
-
-                  <span className="text-[color:var(--muted-foreground)]">
-                    VA / Making Charges
-                  </span>
-
-                  <span className="text-[color:var(--espresso)]">
-                    {formatINR(
-                      displayVaTotal
-                    )}
-                  </span>
-
-                </div>
-
-                <div className="flex justify-between text-sm pt-1">
-
-                  <span className="text-[color:var(--muted-foreground)]">
-                    Subtotal
-                  </span>
-
-                  <span className="text-[color:var(--espresso)]">
-                    {formatINR(
-                      displaySubtotal
-                    )}
-                  </span>
-
-                </div>
-
-              </div>
-
-              {/* =========================================
-                  CUSTOMER DISCOUNT
-              ========================================= */}
-
-              {customerDiscount &&
-                customerDiscountAmount >
-                  0 && (
-
-                  <div className="mt-3 rounded-xl border border-[color:var(--gold)]/30 bg-[color:var(--cream)]/40 p-3">
-
-                    <div className="flex items-center justify-between gap-3">
-
-                      <div>
-
-                        <p className="text-xs font-semibold text-[color:var(--gold-dark)]">
-                          Customer Discount
-                        </p>
-
-                        <p className="text-xs text-[color:var(--muted-foreground)] mt-0.5">
-                          {
-                            customerDiscount.name ||
-                            "Special customer offer"
-                          }
-                        </p>
-
-                      </div>
-
-                      <span className="text-sm font-bold text-green-700 whitespace-nowrap">
-
-                        {customerDiscount.kind ===
-                        "percent"
-                          ? `${customerDiscount.value}% OFF`
-                          : `${formatINR(
-                              Number(
-                                customerDiscount.value
-                              )
-                            )} OFF`}
-
-                      </span>
-
-                    </div>
-
-                    <div className="flex justify-between text-sm mt-2">
-
-                      <span className="text-green-700">
-                        Customer discount
-                      </span>
-
-                      <span className="text-green-700 font-medium">
-                        -{formatINR(
-                          customerDiscountAmount
-                        )}
-                      </span>
-
-                    </div>
-
-                    <p className="text-[10px] text-[color:var(--muted-foreground)] mt-1">
-                      Applied to making /
-                      VA charges.
-                    </p>
-
-                  </div>
-                )}
-
-              {/* =========================================
-                  SEASONAL / PRODUCT DISCOUNTS
-              ========================================= */}
-
-              {seasonalDiscountGroups.map(
-                (group) => (
-
-                  <div
-                    key={
-                      group.discount.id
-                    }
-                    className="mt-3 rounded-xl border border-[color:var(--gold)]/30 bg-[color:var(--cream)]/40 p-3"
-                  >
-
-                    <div className="flex items-center justify-between gap-3">
-
-                      <div>
-
-                        <p className="text-xs font-semibold text-[color:var(--gold-dark)]">
-                          {group.discount.target ===
-                          "PRODUCT"
-                            ? "Product Discount"
-                            : "Seasonal Discount"}
-                        </p>
-
-                        <p className="text-xs text-[color:var(--muted-foreground)] mt-0.5">
-                          {
-                            group.discount.name ||
-                            "Special offer"
-                          }
-                        </p>
-
-                      </div>
-
-                      <span className="text-sm font-bold text-green-700 whitespace-nowrap">
-
-                        {group.discount.kind ===
-                        "percent"
-                          ? `${group.discount.value}% OFF`
-                          : `${formatINR(
-                              Number(
-                                group.discount.value
-                              )
-                            )} OFF`}
-
-                      </span>
-
-                    </div>
-
-                    <div className="flex justify-between text-sm mt-2">
-
-                      <span className="text-green-700">
-                        {group.discount.target ===
-                        "PRODUCT"
-                          ? "Product discount"
-                          : "Seasonal discount"}
-                      </span>
-
-                      <span className="text-green-700 font-medium">
-                        -{formatINR(
-                          group.amount
-                        )}
-                      </span>
-
-                    </div>
-
-                    <p className="text-[10px] text-[color:var(--muted-foreground)] mt-1">
-                      Applied to making /
-                      VA charges.
-                    </p>
-
-                    {group.products.length >
-                      0 && (
-                      <p className="text-[10px] text-[color:var(--muted-foreground)] mt-1">
-                        Applies to:{" "}
-                        {group.products.join(
-                          ", "
-                        )}
-                      </p>
-                    )}
-
-                  </div>
-
-                )
-              )}
-
-              {/* =========================================
-                  COUPON APPLIED
-              ========================================= */}
-
-              {appliedCoupon && (
-
-                <div className="mt-3 rounded-xl border border-green-200 bg-green-50/60 p-3">
-
-                  <div className="flex items-center justify-between gap-3">
-
-                    <div>
-
-                      <p className="text-xs font-semibold text-green-700">
-                        Coupon Applied
-                      </p>
-
-                      <p className="text-sm font-semibold text-[color:var(--espresso)] mt-0.5">
-                        {
-                          appliedCoupon.code
-                        }
-                      </p>
-
-                      {appliedCoupon.name && (
-                        <p className="text-[10px] text-[color:var(--muted-foreground)] mt-0.5">
-                          {
-                            appliedCoupon.name
-                          }
-                        </p>
-                      )}
-
-                    </div>
-
-                    <span className="text-xs font-semibold text-green-700">
-                      Applied from cart
-                    </span>
-
-                  </div>
-
-                </div>
-
-              )}
-
-              {/* =========================================
-                  BACKEND DISCOUNT FALLBACK
-              ========================================= */}
-
-              {backendTotal !==
-                null &&
-                backendDiscount >
-                  0 &&
-                !customerDiscount &&
-                seasonalDiscountGroups.length ===
-                  0 && (
-
-                  <div className="mt-3 flex justify-between text-sm">
-
-                    <span className="text-green-700">
-                      Offers & Discounts
-                    </span>
-
-                    <span className="text-green-700 font-medium">
-                      -{formatINR(
-                        backendDiscount
-                      )}
-                    </span>
-
-                  </div>
-                )}
-
-              {/* =========================================
-                  TOTAL
-              ========================================= */}
-
-              <div className="flex justify-between font-bold text-lg text-[color:var(--espresso)] pt-4 mt-3 border-t border-[color:var(--gold)]/30">
-
-                <span>
-                  Total Payable
-                </span>
-
-                <span>
-                  {formatINR(
-                    displayTotal
-                  )}
-                </span>
-
-              </div>
-
-              {/* =========================================
-                  DISCOUNT SAVING
-              ========================================= */}
-
-              {displayDiscount >
-                0 && (
-
-                <div className="mt-3 rounded-xl bg-green-50 border border-green-100 px-3 py-2">
+                <div className="space-y-1">
 
                   <div className="flex justify-between text-sm">
-
-                    <span className="text-green-700 font-medium">
-                      You Save
+                    <span className="text-[color:var(--muted-foreground)]">
+                      Cost of Metal
                     </span>
-
-                    <span className="text-green-700 font-bold">
+                    <span className="text-[color:var(--espresso)]">
                       {formatINR(
-                        displayDiscount
+                        displayMetalTotal
                       )}
                     </span>
-
                   </div>
 
+                  <div className="flex justify-between text-sm">
+                    <span className="text-[color:var(--muted-foreground)]">
+                      VA / Making Charges
+                    </span>
+                    <span className="text-[color:var(--espresso)]">
+                      {formatINR(
+                        displayVaTotal
+                      )}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between text-sm pt-1">
+                    <span className="text-[color:var(--muted-foreground)]">
+                      Subtotal
+                    </span>
+                    <span className="text-[color:var(--espresso)]">
+                      {formatINR(
+                        displaySubtotal
+                      )}
+                    </span>
+                  </div>
+
+                {customerDiscount &&
+                  customerDiscountAmount >
+                    0 && (
+                    <div className="mt-3 rounded-xl border border-[color:var(--gold)]/30 bg-[color:var(--cream)]/40 p-3">
+
+                      <div className="flex items-center justify-between gap-3">
+
+                        <div>
+
+                          <p className="text-xs font-semibold text-[color:var(--gold-dark)]">
+                            Your Special Discount
+                          </p>
+
+                          <p className="text-xs text-[color:var(--muted-foreground)] mt-0.5">
+                            {
+                              customerDiscount.name ||
+                              "Customer Discount"
+                            }
+                          </p>
+
+                        </div>
+
+                        <span className="text-sm font-bold text-green-700 whitespace-nowrap">
+
+                          {customerDiscount.kind ===
+                          "percent"
+                            ? `${customerDiscount.value}% OFF`
+                            : `${formatINR(
+                                Number(
+                                  customerDiscount.value
+                                )
+                              )} OFF`}
+
+                        </span>
+
+                      </div>
+
+                      <div className="flex justify-between text-sm mt-2">
+
+                        <span className="text-green-700">
+                          Customer discount
+                        </span>
+
+                        <span className="text-green-700 font-medium">
+                          -{formatINR(
+                            customerDiscountAmount
+                          )}
+                        </span>
+
+                      </div>
+
+                      <p className="text-[10px] text-[color:var(--muted-foreground)] mt-1">
+                        Applied to making / VA charges.
+                      </p>
+
+                    </div>
+                  )}
+
+                {/* =======================================
+                    COUPON DISCOUNT
+                ======================================= */}
+
+                {appliedCoupon &&
+                  backendDiscount >
+                    customerDiscountAmount &&
+                  backendTotal !== null && (
+                    <div className="flex justify-between text-sm mt-2">
+                      <div>
+                        <span className="text-green-700">
+                          Coupon Discount
+                        </span>
+                        <p className="text-[10px] text-[color:var(--muted-foreground)] mt-0.5">
+                          {appliedCoupon}
+                        </p>
+                      </div>
+
+                      <span className="text-green-700 font-medium">
+                        -{formatINR(
+                          Math.max(
+                            backendDiscount -
+                              customerDiscountAmount,
+                            0
+                          )
+                        )}
+                      </span>
+                    </div>
+                  )}
+
+                {/* =======================================
+                    TOTAL
+                ======================================= */}
+
+                <div className="flex justify-between font-bold text-lg text-[color:var(--espresso)] pt-3">
+
+                  <span>
+                    Total Payable
+                  </span>
+
+                  <span>
+                    {formatINR(
+                      displayTotal
+                    )}
+                  </span>
+
                 </div>
-              )}
+
+              </div>
 
               {/* =========================================
-                  DISCOUNT LOADING
+                  CUSTOMER DISCOUNT LOADING
               ========================================= */}
 
-              {loadingDiscounts && (
-                <p className="text-[10px] text-[color:var(--muted-foreground)] mt-3">
-                  Checking available
-                  offers...
+              {loadingCustomerDiscount && (
+                <p className="text-[10px] text-[color:var(--muted-foreground)] mt-2">
+                  Checking your special
+                  discounts...
                 </p>
               )}
 
               {/* =========================================
-                  PAYMENT
+                  APPLIED COUPON
+              ========================================= */}
+
+              {appliedCoupon && (
+                <div className="mt-5 rounded-xl border border-[color:var(--gold)]/30 bg-white/60 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold text-[color:var(--gold-dark)]">
+                        Coupon Applied
+                      </p>
+                      <p className="text-xs text-[color:var(--muted-foreground)] mt-0.5">
+                        {appliedCoupon}
+                      </p>
+                    </div>
+                    <span className="text-xs font-semibold text-green-700">
+                      Applied from cart
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* =========================================
+                  PAYMENT BUTTON
               ========================================= */}
 
               <button
                 type="submit"
                 disabled={
                   loading ||
-                  items.length ===
-                    0
+                  items.length === 0
                 }
                 className="pill-gold w-full justify-center mt-5 flex py-3 text-sm font-semibold tracking-wider uppercase transition disabled:opacity-50 cursor-pointer"
               >
@@ -2472,10 +1992,8 @@ export function Checkout() {
               </button>
 
             </div>
-
           </form>
         )}
-
       </div>
     </Layout>
   );
