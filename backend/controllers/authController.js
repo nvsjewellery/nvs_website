@@ -181,7 +181,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
   if (!user) {
     return res.status(200).json({
       success: true,
-      message: "If that email is registered, a password reset link has been sent.",
+      message: "If that email is registered, a password reset link has been sent to your inbox.",
     });
   }
 
@@ -233,6 +233,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
       message: "Password reset instructions have been sent to your email inbox.",
     });
   } catch (error) {
+    // Clean up reset token fields in DB if dispatch fails
     await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -242,7 +243,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
     });
 
     res.status(500);
-    throw new Error("Failed to send reset email. Please try again later.");
+    throw new Error(error.message || "Failed to send reset email. Please try again later.");
   }
 });
 
