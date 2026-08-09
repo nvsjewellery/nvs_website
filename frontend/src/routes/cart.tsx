@@ -48,7 +48,23 @@ function CartPage() {
     useState("");
 
   const [appliedCoupon, setAppliedCoupon] =
-    useState<Discount | null>(null);
+    useState<Discount | null>(() => {
+      if (typeof window === "undefined") {
+        return null;
+      }
+
+      try {
+        const stored = sessionStorage.getItem(
+          "nvs-applied-coupon"
+        );
+
+        return stored
+          ? (JSON.parse(stored) as Discount)
+          : null;
+      } catch {
+        return null;
+      }
+    });
 
   const [couponLoading, setCouponLoading] =
     useState(false);
@@ -440,7 +456,11 @@ function CartPage() {
     if (
       appliedCoupon &&
       appliedCoupon.type ===
-        "COUPON"
+        "COUPON" &&
+      (appliedCoupon.target ===
+        "PRODUCT" ||
+        appliedCoupon.target ===
+          "CATEGORY")
     ) {
       if (
         discountAppliesToProduct(
@@ -516,6 +536,108 @@ function CartPage() {
 
     return bestDiscount;
   }
+
+  /* =======================================================
+   REVALIDATE STORED COUPON AFTER CART LOAD
+======================================================= */
+
+useEffect(() => {
+  if (!appliedCoupon?.code || items.length === 0) {
+    return;
+  }
+
+  let cancelled = false;
+
+  async function revalidateCoupon() {
+    const couponCode = appliedCoupon?.code?.trim();
+
+    if (!couponCode) {
+      return;
+    }
+
+    try {
+      const validated =
+        await discountsApi.validateCoupon(
+          couponCode
+        );
+
+      if (cancelled) {
+        return;
+      }
+
+      /*
+       * Make sure the stored discount
+       * is still a valid coupon.
+       */
+
+      if (
+        !validated ||
+        validated.type !== "COUPON"
+      ) {
+        setAppliedCoupon(null);
+        setCoupon("");
+        setCouponError(
+          "This coupon is no longer valid."
+        );
+        setCouponSuccess("");
+        return;
+      }
+
+      /*
+       * Make sure the coupon still
+       * applies to something in the cart.
+       */
+
+      const applies = items.some(
+        (item: any) =>
+          discountAppliesToProduct(
+            validated,
+            item.p
+          )
+      );
+
+      if (!applies) {
+        setAppliedCoupon(null);
+        setCoupon("");
+        setCouponError(
+          "This coupon no longer applies to your cart."
+        );
+        setCouponSuccess("");
+        return;
+      }
+
+      /*
+       * Store the freshly validated
+       * coupon returned by backend.
+       */
+
+      setAppliedCoupon(validated);
+
+      setCouponSuccess(
+        validated.name
+          ? `${validated.name} applied successfully.`
+          : "Coupon applied successfully."
+      );
+    } catch (error) {
+      if (cancelled) {
+        return;
+      }
+
+      setAppliedCoupon(null);
+      setCoupon("");
+      setCouponError(
+        "Unable to validate the coupon."
+      );
+      setCouponSuccess("");
+    }
+  }
+
+  revalidateCoupon();
+
+  return () => {
+    cancelled = true;
+  };
+}, [appliedCoupon?.code, items]);
 
   /* =======================================================
      CALCULATE CART ITEMS WITH DISCOUNTS
@@ -716,14 +838,36 @@ function CartPage() {
       : 0;
 
   /* =======================================================
+     CART COUPON
+
+     A CART coupon is applied ONCE against
+     the TOTAL cart VA. It is NOT multiplied
+     by the number of products.
+  ======================================================= */
+
+  const cartCouponAmount =
+    appliedCoupon &&
+    appliedCoupon.type === "COUPON" &&
+    appliedCoupon.target === "CART"
+      ? calculateDiscountAmount(
+          cartVaTotal,
+          appliedCoupon
+        )
+      : 0;
+
+  /* =======================================================
      TOTAL DISCOUNT
   ======================================================= */
 
+  const requestedTotalDiscount =
+    productDiscountTotal +
+    customerDiscountAmount +
+    cartCouponAmount;
+
   const totalDiscount =
     Math.min(
-      subtotal,
-      productDiscountTotal +
-        customerDiscountAmount
+      Math.max(requestedTotalDiscount, 0),
+      cartVaTotal
     );
 
   /* =======================================================
@@ -803,6 +947,11 @@ function CartPage() {
         validatedCoupon
       );
 
+      sessionStorage.setItem(
+        "nvs-applied-coupon",
+        JSON.stringify(validatedCoupon)
+      );
+
       setCouponSuccess(
         validatedCoupon.name
           ? `${validatedCoupon.name} applied successfully.`
@@ -810,6 +959,7 @@ function CartPage() {
       );
     } catch (error: any) {
       setAppliedCoupon(null);
+      sessionStorage.removeItem("nvs-applied-coupon");
 
       setCouponError(
         error?.message ||
@@ -826,6 +976,7 @@ function CartPage() {
 
   function handleRemoveCoupon() {
     setAppliedCoupon(null);
+    sessionStorage.removeItem("nvs-applied-coupon");
     setCoupon("");
     setCouponError("");
     setCouponSuccess("");
@@ -1169,7 +1320,28 @@ function CartPage() {
                 )}
 
               {/* =================================================
-                  PRODUCT / SEASONAL / COUPON DISCOUNT
+                  CART COUPON DISCOUNT
+              ================================================= */}
+
+              {appliedCoupon &&
+                cartCouponAmount > 0 && (
+                <Row
+                  l={
+                    appliedCoupon.name ||
+                    "Coupon Discount"
+                  }
+                  v={
+                    <span className="text-green-700">
+                      -{formatINR(
+                        cartCouponAmount
+                      )}
+                    </span>
+                  }
+                />
+              )}
+
+              {/* =================================================
+                  PRODUCT / SEASONAL DISCOUNT
               ================================================= */}
 
               {productDiscountTotal >
