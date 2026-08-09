@@ -7,44 +7,60 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ============================================================
+// USER
+// ============================================================
+
 model User {
-  id        String    @id @default(uuid())
-  name      String
-  email     String    @unique
-  password  String
-  phone     String?
-  orders    Order[]   // add this line
+  id       String  @id @default(uuid())
+  name     String
+  email    String  @unique
+  password String
+  phone    String?
+
+  orders    Order[]
   addresses Address[]
   wishlist  Wishlist[]
   cart      Cart[]
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  // Customer-specific discounts
+  discounts Discount[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("users")
 }
 
-model Address {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+// ============================================================
+// ADDRESS
+// ============================================================
 
-  label       String   @default("Home")
+model Address {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  label       String  @default("Home")
   addressLine String
   city        String
-  state       String   @default("Andhra Pradesh")  // add this
-
+  state       String  @default("Andhra Pradesh")
   pincode     String
-  isDefault   Boolean  @default(false)
+  isDefault   Boolean @default(false)
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("addresses")
 }
 
+// ============================================================
+// WISHLIST
+// ============================================================
+
 model Wishlist {
-  id        String   @id @default(cuid())
+  id String @id @default(cuid())
 
   userId    String
   productId String
@@ -58,8 +74,12 @@ model Wishlist {
   @@map("wishlists")
 }
 
+// ============================================================
+// CART
+// ============================================================
+
 model Cart {
-  id        String   @id @default(cuid())
+  id String @id @default(cuid())
 
   userId    String
   productId String
@@ -76,78 +96,335 @@ model Cart {
   @@map("cart")
 }
 
+// ============================================================
+// PRODUCT
+// ============================================================
+
 model Product {
-  id               String        @id @default(cuid())
-  name             String
-  description      String        @default("")
-  metal            Metal
-  category         String
-  purity           String
-  grossWeight      Float?
-  stoneWeight      Float?
-  stoneCost        Float?
-  hallmarkId       String?
-  sku              String        @unique
-  va               Float?
-  isDirectSterling Boolean       @default(false)
+  id String @id @default(cuid())
+
+  name        String
+  description String @default("")
+
+  metal    Metal
+  category String
+  purity   String
+
+  grossWeight Float?
+  stoneWeight Float?
+  stoneCost   Float?
+
+  hallmarkId String?
+  sku        String  @unique
+
+  // Value Addition / Making Charges
+  va Float?
+
+  isDirectSterling Boolean @default(false)
   pieceCost        Float?
-  image            String        @default("")
-  status           ProductStatus @default(Draft)
-  stock            Int           @default(0)
-  sold             Int           @default(0)
+
+  image  String        @default("")
+  status ProductStatus @default(Draft)
+
+  stock Int @default(0)
+  sold  Int @default(0)
+
+  gstRate Float? @default(3)
 
   wishlist   Wishlist[]
   cart       Cart[]
   orderItems OrderItem[]
 
+  // Products targeted by discounts
+  discounts Discount[] @relation("DiscountProducts")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  gstRate Float? @default(3)
 
   @@map("products")
 }
 
+// ============================================================
+// CATEGORY
+// ============================================================
+
 model Category {
-  id        String   @id @default(cuid())
-  metal     Metal
-  name      String
-  slug      String
-  metaTitle String   @default("")
-  metaDesc  String   @default("")
-  image     String   @default("")
-  sortOrder Int      @default(0)
+  id String @id @default(cuid())
+
+  metal Metal
+  name  String
+  slug  String
+
+  metaTitle String @default("")
+  metaDesc  String @default("")
+
+  image     String @default("")
+  sortOrder Int    @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([metal, slug])
-
   @@map("categories")
 }
 
-model Discount {
-  id         String        @id @default(cuid())
-  metal      Metal
-  category   String
-  productIds String[]
-  scope      DiscountScope
-  kind       DiscountKind
-  value      Float
-  createdAt  DateTime      @default(now())
+// ============================================================
+// DISCOUNT
+// ============================================================
 
+model Discount {
+  id String @id @default(cuid())
+
+  // ----------------------------------------------------------
+  // DISCOUNT TYPE
+  // ----------------------------------------------------------
+  //
+  // SEASONAL
+  //   Festive / promotional discount.
+  //
+  // COUPON
+  //   Customer enters a coupon code during checkout.
+  //
+  // CUSTOMER
+  //   Discount specifically assigned to one customer.
+  //
+  type DiscountType
+
+  // ----------------------------------------------------------
+  // DISCOUNT TARGET
+  // ----------------------------------------------------------
+  //
+  // PRODUCT
+  //   Specific products.
+  //
+  // CATEGORY
+  //   All products belonging to a category.
+  //
+  // CART
+  //   Any eligible product in the customer's cart.
+  //
+  // CUSTOMER
+  //   Specific customer's eligible products.
+  //
+  target DiscountTarget
+
+  // ----------------------------------------------------------
+  // DISCOUNT VALUE
+  // ----------------------------------------------------------
+  //
+  // percent
+  //   Example: 10 = 10%
+  //
+  // flat
+  //   Example: 500 = ₹500
+  //
+  // IMPORTANT:
+  // The backend will ALWAYS apply this value ONLY to VA.
+  //
+  kind  DiscountKind
+  value Float
+
+  // ----------------------------------------------------------
+  // ADMIN-FRIENDLY NAME
+  // ----------------------------------------------------------
+
+  name String?
+
+  // ----------------------------------------------------------
+  // COUPON CODE
+  // ----------------------------------------------------------
+  //
+  // Used only for coupon-type discounts.
+  //
+  // Example:
+  // NVS10
+  // DIWALI25
+  //
+  code String? @unique
+
+  // ----------------------------------------------------------
+  // PRODUCT / CATEGORY TARGETING
+  // ----------------------------------------------------------
+
+  metal    Metal?
+  category String?
+
+  // Specific products targeted by this discount
+  products Product[] @relation("DiscountProducts")
+
+  // ----------------------------------------------------------
+  // CUSTOMER TARGETING
+  // ----------------------------------------------------------
+  //
+  // Used for customer-specific discounts.
+  //
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // ----------------------------------------------------------
+  // VALIDITY
+  // ----------------------------------------------------------
+
+  startDate DateTime?
+  endDate   DateTime?
+
+  // ----------------------------------------------------------
+  // COUPON USAGE
+  // ----------------------------------------------------------
+
+  usageLimit Int?
+  usageCount Int  @default(0)
+
+  // ----------------------------------------------------------
+  // ACTIVE / INACTIVE
+  // ----------------------------------------------------------
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type])
+  @@index([target])
+  @@index([userId])
+  @@index([code])
   @@map("discounts")
 }
 
+// ============================================================
+// REELS
+// ============================================================
+
 model Reel {
-  id          String   @id @default(cuid())
-  title       String?
+  id String @id @default(cuid())
+
+  title        String?
   instagramUrl String
-  videoUrl    String   // 5-second MP4 video preview URL (uploaded via admin)
-  isActive    Boolean  @default(true)
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  videoUrl     String
+
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
+
+// ============================================================
+// ORDER
+// ============================================================
+
+model Order {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  items OrderItem[]
+
+  // ----------------------------------------------------------
+  // CUSTOMER / SHIPPING SNAPSHOT
+  // ----------------------------------------------------------
+
+  customerName     String
+  customerLastName String @default("NA")
+  customerEmail    String
+  customerPhone    String
+
+  address String
+  city    String
+  state   String
+  pincode String
+
+  // ----------------------------------------------------------
+  // RAZORPAY
+  // ----------------------------------------------------------
+
+  razorpayOrderId   String?
+  razorpayPaymentId String?
+
+  // ----------------------------------------------------------
+  // ORDER PRICE
+  // ----------------------------------------------------------
+
+  // Price before discount
+  subTotal Float
+
+  // Amount saved through discount.
+  //
+  // IMPORTANT:
+  // This will always represent discount applied ONLY to VA.
+  //
+  discountAmount Float @default(0)
+
+  // Coupon code used by customer, if any.
+  discountCode String?
+
+  // Discount type used for this order, if any.
+  discountType DiscountType?
+
+  // Final amount paid by customer.
+  total Float
+
+  // ----------------------------------------------------------
+  // PAYMENT
+  // ----------------------------------------------------------
+
+  paymentMethod PaymentMethod @default(Prepaid)
+  paymentStatus PaymentStatus @default(Pending)
+
+  // ----------------------------------------------------------
+  // ORDER STATUS
+  // ----------------------------------------------------------
+
+  status OrderStatus @default(Placed)
+
+  // ----------------------------------------------------------
+  // SHIPROCKET
+  // ----------------------------------------------------------
+
+  srOrderId     String?
+  srShipmentId  String?
+  srAwbCode     String?
+  srCourierName String?
+
+  labelUrl    String?
+  invoiceUrl  String?
+  manifestUrl String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("orders")
+}
+
+// ============================================================
+// ORDER ITEM
+// ============================================================
+
+model OrderItem {
+  id String @id @default(cuid())
+
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  name String
+  sku  String
+
+  qty Int
+
+  // Final selling price of one item after the
+  // applicable VA-only discount.
+  sellingPrice Float
+
+  @@map("order_items")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
 
 enum Metal {
   Gold
@@ -160,71 +437,51 @@ enum ProductStatus {
   Draft
 }
 
-enum DiscountScope {
-  VA
-  Total
+// ============================================================
+// DISCOUNT TYPE
+// ============================================================
+
+enum DiscountType {
+  // Festive / seasonal discount
+  SEASONAL
+
+  // Coupon entered by customer
+  COUPON
+
+  // Personally assigned to a customer
+  CUSTOMER
 }
+
+// ============================================================
+// DISCOUNT TARGET
+// ============================================================
+
+enum DiscountTarget {
+  // Selected products
+  PRODUCT
+
+  // Entire category
+  CATEGORY
+
+  // Eligible products throughout cart
+  CART
+
+  // Specific customer
+  CUSTOMER
+}
+
+// ============================================================
+// DISCOUNT KIND
+// ============================================================
 
 enum DiscountKind {
   percent
   flat
 }
 
-model Order {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-
-  items     OrderItem[]
-
-  // Customer/shipping details snapshotted at order time
-  customerName    String
-  customerLastName String @default("NA")
-  customerEmail   String
-  customerPhone   String
-  address         String
-  city            String
-  state           String
-  pincode         String
-  razorpayOrderId   String?
-  razorpayPaymentId String?
-  subTotal      Float
-  total         Float
-  paymentMethod PaymentMethod @default(Prepaid)
-  paymentStatus PaymentStatus @default(Pending)
-
-  status        OrderStatus @default(Placed)
-
-  // Shiprocket fields
-  srOrderId     String?
-  srShipmentId  String?
-  srAwbCode     String?
-  srCourierName String?
-  labelUrl      String?
-  invoiceUrl    String?
-  manifestUrl   String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("orders")
-}
-
-model OrderItem {
-  id        String  @id @default(cuid())
-  orderId   String
-  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-
-  productId String
-  product   Product @relation(fields: [productId], references: [id])
-
-  name          String
-  sku           String
-  qty           Int
-  sellingPrice  Float
-
-  @@map("order_items")
-}
+// ============================================================
+// PAYMENT
+// ============================================================
 
 enum PaymentMethod {
   Prepaid
@@ -237,6 +494,10 @@ enum PaymentStatus {
   Failed
   Refunded
 }
+
+// ============================================================
+// ORDER STATUS
+// ============================================================
 
 enum OrderStatus {
   Placed

@@ -1,18 +1,54 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
-import { Heart, Minus, Plus } from "lucide-react";
+import {
+  createFileRoute,
+  Link,
+  notFound,
+} from "@tanstack/react-router";
+
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import {
+  Heart,
+  Minus,
+  Plus,
+  Tag,
+} from "lucide-react";
+
 import { Layout } from "@/components/Layout";
 import { OrnamentalDivider } from "@/components/OrnamentalDivider";
-import { metalSlug } from "@/lib/products";
-import { productsApi } from "@/lib/api";
-import { actions, formatINR, useStore } from "@/lib/store";
 
-export const Route = createFileRoute("/product/$id")({
+import { metalSlug } from "@/lib/products";
+
+import {
+  productsApi,
+  discountsApi,
+  type Discount,
+} from "@/lib/api";
+
+import {
+  actions,
+  formatINR,
+  useStore,
+} from "@/lib/store";
+
+/* =========================================================
+   ROUTE
+========================================================= */
+
+export const Route = createFileRoute(
+  "/product/$id"
+)({
   component: ProductPage,
 
   loader: async ({ params }) => {
     try {
-      const p = await productsApi.getById(params.id);
+      const p =
+        await productsApi.getById(
+          params.id
+        );
 
       if (!p) {
         throw notFound();
@@ -25,64 +61,361 @@ export const Route = createFileRoute("/product/$id")({
   },
 });
 
+/* =========================================================
+   PRODUCT PAGE
+========================================================= */
+
 function ProductPage() {
-  const rawData = Route.useLoaderData() as any;
-  const p = rawData?.product || rawData || {};
+  const rawData =
+    Route.useLoaderData() as any;
 
-  const [qty, setQty] = useState(1);
-  const [selectedImg, setSelectedImg] = useState<string | null>(null);
+  const p =
+    rawData?.product ||
+    rawData ||
+    {};
 
-  const wishlist = useStore((s) => s.wishlist);
-  const saved = wishlist.includes(p?.id);
+  const [qty, setQty] =
+    useState(1);
+
+  const [
+    selectedImg,
+    setSelectedImg,
+  ] = useState<string | null>(
+    null
+  );
+
+  const [
+    discount,
+    setDiscount,
+  ] = useState<Discount | null>(
+    null
+  );
+
+  const wishlist =
+    useStore((s) => s.wishlist);
+
+  const saved =
+    wishlist.includes(p?.id);
+
+  /* =======================================================
+     PRODUCT IMAGES
+  ======================================================= */
+
+  const productImages =
+    useMemo<string[]>(() => {
+      const images: string[] = [];
+
+      if (
+        Array.isArray(
+          p?.images
+        )
+      ) {
+        for (const image of p.images) {
+          if (
+            typeof image ===
+              "string" &&
+            image.trim()
+          ) {
+            images.push(image);
+          }
+        }
+      }
+
+      if (
+        images.length === 0 &&
+        typeof p?.image ===
+          "string"
+      ) {
+        if (p.image.trim()) {
+          images.push(
+            p.image
+          );
+        }
+      }
+
+      return Array.from(
+        new Set(images)
+      );
+    }, [p]);
+
+  const currentImage =
+    selectedImg ||
+    productImages[0] ||
+    "";
+
+  /* =======================================================
+     BASIC PRODUCT DATA
+  ======================================================= */
+
+  const weightVal =
+    Number(
+      p?.weight ??
+        p?.grossWeight ??
+        0
+    );
 
   /*
-   * Explicitly make this string[].
-   * This fixes the TypeScript "unknown is not assignable to string" error.
+   * IMPORTANT:
+   *
+   * We are still trusting the backend
+   * product price here.
+   *
+   * The actual discount calculation
+   * will be handled later in cart/order
+   * pricing.
    */
-  const productImages = useMemo<string[]>(() => {
-    const images: string[] = [];
+  const total =
+    Number(
+      p?.price ?? 0
+    );
 
-    if (Array.isArray(p?.images)) {
-      for (const image of p.images) {
-        if (typeof image === "string" && image.trim()) {
-          images.push(image);
+  const metalValue =
+    Number(
+      p?.metalValue ?? 0
+    );
+
+  const making =
+    Number(
+      p?.making ?? 0
+    );
+
+  const gst =
+    Number(
+      p?.gst ?? 0
+    );
+
+  /* =======================================================
+     DESCRIPTION
+  ======================================================= */
+
+  const rawDesc =
+    String(
+      p?.description ||
+        p?.desc ||
+        p?.details ||
+        p?.summary ||
+        ""
+    ).trim();
+
+  /* =======================================================
+     LOAD SEASONAL PRODUCT DISCOUNT
+  ======================================================= */
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadDiscount() {
+      try {
+        const discounts =
+          await discountsApi.getAvailable();
+
+        if (cancelled) {
+          return;
+        }
+
+        /*
+         * Only SEASONAL discounts
+         * are displayed directly
+         * on the product page.
+         *
+         * CUSTOMER discounts:
+         * handled at cart level.
+         *
+         * COUPONS:
+         * handled at cart level.
+         */
+
+        const applicable =
+          discounts.filter(
+            (item) => {
+              /* -------------------------------------------
+                 ONLY SEASONAL
+              ------------------------------------------- */
+
+              if (
+                item.type !==
+                "SEASONAL"
+              ) {
+                return false;
+              }
+
+              /* -------------------------------------------
+                 METAL RESTRICTION
+              ------------------------------------------- */
+
+              if (
+                item.metal &&
+                item.metal !==
+                  p.metal
+              ) {
+                return false;
+              }
+
+              /* -------------------------------------------
+                 PRODUCT-SPECIFIC DISCOUNT
+              ------------------------------------------- */
+
+              if (
+                item.target ===
+                "PRODUCT"
+              ) {
+                if (
+                  !Array.isArray(
+                    item.products
+                  )
+                ) {
+                  return false;
+                }
+
+                return item.products.some(
+                  (discountProduct) =>
+                    discountProduct.id ===
+                    p.id
+                );
+              }
+
+              /* -------------------------------------------
+                 CATEGORY DISCOUNT
+              ------------------------------------------- */
+
+              if (
+                item.target ===
+                "CATEGORY"
+              ) {
+                const productCategory =
+                  String(
+                    p.category ??
+                      p.sub ??
+                      ""
+                  )
+                    .trim()
+                    .toLowerCase();
+
+                const discountCategory =
+                  String(
+                    item.category ??
+                      ""
+                  )
+                    .trim()
+                    .toLowerCase();
+
+                if (
+                  !productCategory ||
+                  !discountCategory
+                ) {
+                  return false;
+                }
+
+                return (
+                  productCategory ===
+                  discountCategory
+                );
+              }
+
+              /*
+               * CART and CUSTOMER discounts
+               * are not displayed here.
+               */
+
+              return false;
+            }
+          );
+
+        /* -----------------------------------------------
+           NO APPLICABLE DISCOUNT
+        ----------------------------------------------- */
+
+        if (
+          applicable.length === 0
+        ) {
+          setDiscount(null);
+          return;
+        }
+
+        /* -----------------------------------------------
+           FIND STRONGEST DISCOUNT
+        -----------------------------------------------
+
+           For now, the product page only
+           needs to display the configured
+           discount value.
+
+           Actual monetary discount calculation
+           against VA will happen later.
+        */
+
+        const best =
+          applicable.reduce(
+            (
+              current,
+              next
+            ) => {
+              if (!current) {
+                return next;
+              }
+
+              return next.value >
+                current.value
+                ? next
+                : current;
+            },
+            null as
+              | Discount
+              | null
+          );
+
+        setDiscount(best);
+      } catch (error) {
+        /*
+         * Discount display should NEVER
+         * break the product page.
+         */
+
+        console.error(
+          "Failed to load product discount:",
+          error
+        );
+
+        if (!cancelled) {
+          setDiscount(null);
         }
       }
     }
 
-    if (images.length === 0 && typeof p?.image === "string") {
-      if (p.image.trim()) {
-        images.push(p.image);
-      }
-    }
+    loadDiscount();
 
-    return Array.from(new Set(images));
-  }, [p]);
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    p.id,
+    p.metal,
+    p.category,
+    p.sub,
+  ]);
 
-  const currentImage =
-    selectedImg || productImages[0] || "";
+  /* =======================================================
+     DISCOUNT LABEL
+  ======================================================= */
 
-  const weightVal = Number(
-    p?.weight ?? p?.grossWeight ?? 0
-  );
+  const discountLabel =
+    discount
+      ? discount.kind ===
+        "percent"
+        ? `${discount.value}% OFF`
+        : `₹${discount.value} OFF`
+      : null;
 
-  // Trust backend pricing completely.
-  const total = Number(p?.price ?? 0);
-  const metalValue = Number(p?.metalValue ?? 0);
-  const making = Number(p?.making ?? 0);
-  const gst = Number(p?.gst ?? 0);
-
-  const rawDesc = String(
-    p?.description ||
-      p?.desc ||
-      p?.details ||
-      p?.summary ||
-      ""
-  ).trim();
+  /* =========================================================
+     UI
+  ========================================================= */
 
   return (
     <Layout>
-      {/* Breadcrumb */}
+      {/* =================================================
+          BREADCRUMB
+      ================================================= */}
+
       <div className="max-w-7xl mx-auto px-4 py-6 text-sm text-[color:var(--muted-foreground)]">
         <Link
           to="/"
@@ -94,10 +427,16 @@ function ProductPage() {
         <span> / </span>
 
         <Link
-          to={`/${metalSlug(p.metal || "Gold")}` as string}
+          to={
+            `/${metalSlug(
+              p.metal ||
+                "Gold"
+            )}` as string
+          }
           className="cursor-pointer hover:text-[color:var(--gold-dark)] transition-colors"
         >
-          {p.metal || "Gold"}
+          {p.metal ||
+            "Gold"}
         </Link>
 
         <span> / </span>
@@ -107,15 +446,26 @@ function ProductPage() {
         </span>
       </div>
 
+      {/* =================================================
+          PRODUCT SECTION
+      ================================================= */}
+
       <section className="max-w-7xl mx-auto px-4 grid grid-cols-1 lg:grid-cols-2 gap-10">
-        {/* ==================== PRODUCT IMAGES ==================== */}
+        {/* =================================================
+            PRODUCT IMAGES
+        ================================================= */}
+
         <div>
           {/* Main Image */}
+
           <div className="aspect-square bg-[color:var(--panel)] rounded-2xl overflow-hidden border border-[color:var(--border)]">
             {currentImage ? (
               <img
                 src={currentImage}
-                alt={p.name || "Product image"}
+                alt={
+                  p.name ||
+                  "Product image"
+                }
                 className="w-full h-full object-cover"
               />
             ) : (
@@ -126,42 +476,91 @@ function ProductPage() {
           </div>
 
           {/* Thumbnail Images */}
-          {productImages.length > 1 && (
+
+          {productImages.length >
+            1 && (
             <div className="grid grid-cols-4 gap-3 mt-3">
-              {productImages.map((imgUrl, i) => (
-                <button
-                  key={`${imgUrl}-${i}`}
-                  type="button"
-                  onClick={() => setSelectedImg(imgUrl)}
-                  className={`aspect-square bg-[color:var(--panel)] rounded-lg overflow-hidden border cursor-pointer transition-colors ${
-                    currentImage === imgUrl
-                      ? "border-[color:var(--gold)] ring-1 ring-[color:var(--gold)]"
-                      : "border-[color:var(--border)] hover:border-[color:var(--gold)]"
-                  }`}
-                  aria-label={`View product image ${i + 1}`}
-                >
-                  <img
-                    src={imgUrl}
-                    alt={`${p.name || "Product"} image ${i + 1}`}
-                    className="w-full h-full object-cover"
-                  />
-                </button>
-              ))}
+              {productImages.map(
+                (
+                  imgUrl,
+                  i
+                ) => (
+                  <button
+                    key={`${imgUrl}-${i}`}
+                    type="button"
+                    onClick={() =>
+                      setSelectedImg(
+                        imgUrl
+                      )
+                    }
+                    className={`aspect-square bg-[color:var(--panel)] rounded-lg overflow-hidden border cursor-pointer transition-colors ${
+                      currentImage ===
+                      imgUrl
+                        ? "border-[color:var(--gold)] ring-1 ring-[color:var(--gold)]"
+                        : "border-[color:var(--border)] hover:border-[color:var(--gold)]"
+                    }`}
+                    aria-label={`View product image ${
+                      i + 1
+                    }`}
+                  >
+                    <img
+                      src={imgUrl}
+                      alt={`${p.name || "Product"} image ${
+                        i + 1
+                      }`}
+                      className="w-full h-full object-cover"
+                    />
+                  </button>
+                )
+              )}
             </div>
           )}
         </div>
 
-        {/* ==================== PRODUCT DETAILS ==================== */}
+        {/* =================================================
+            PRODUCT DETAILS
+        ================================================= */}
+
         <div>
+          {/* Metal + Category */}
+
           <p className="label-caps text-[color:var(--gold-dark)] text-xs">
-            {p.metal} · {p.sub || p.category}
+            {p.metal} ·{" "}
+            {p.sub ||
+              p.category}
           </p>
+
+          {/* Product Name */}
 
           <h1 className="font-serif text-4xl md:text-5xl mt-2 text-[color:var(--espresso)]">
             {p.name}
           </h1>
 
-          {/* Purity + Weight */}
+          {/* =================================================
+              SEASONAL DISCOUNT
+          ================================================= */}
+
+          {discountLabel && (
+            <div className="mt-4">
+              <div className="inline-flex items-center gap-1.5 rounded-full bg-[color:var(--gold)] text-white px-3 py-1.5 text-xs font-semibold shadow-sm">
+                <Tag className="w-3.5 h-3.5" />
+
+                {discountLabel}
+              </div>
+
+              <p className="text-xs text-green-700 font-medium mt-2">
+                {discount?.kind ===
+                "percent"
+                  ? `${discount.value}% off making charges`
+                  : `₹${discount?.value} off making charges`}
+              </p>
+            </div>
+          )}
+
+          {/* =================================================
+              PURITY + WEIGHT
+          ================================================= */}
+
           <div className="flex items-center gap-3 mt-4">
             <span className="pill-gold-outline !py-1 !px-3 text-xs">
               {p.purity}
@@ -172,21 +571,32 @@ function ProductPage() {
             </span>
           </div>
 
-          {/* Price */}
+          {/* =================================================
+              PRICE
+          ================================================= */}
+
           <div className="mt-6">
             <div className="text-4xl font-serif text-[color:var(--gold-dark)] font-bold">
-              {formatINR(total)}
+              {formatINR(
+                total
+              )}
             </div>
 
             <p className="text-xs text-[color:var(--muted-foreground)] mt-1">
-              Inclusive of GST · Includes making charges
+              Inclusive of GST ·
+              Includes making
+              charges
             </p>
           </div>
 
-          {/* ==================== PRICE BREAKDOWN ==================== */}
+          {/* =================================================
+              PRICE BREAKDOWN
+          ================================================= */}
+
           <div
             style={{
-              backgroundColor: "var(--panel)",
+              backgroundColor:
+                "var(--panel)",
             }}
             className="rounded-2xl p-5 mt-6"
           >
@@ -196,7 +606,9 @@ function ProductPage() {
 
             <BreakdownRow
               l={`Metal value (${weightVal}g @ ${p.purity})`}
-              v={metalValue}
+              v={
+                metalValue
+              }
             />
 
             <BreakdownRow
@@ -218,14 +630,27 @@ function ProductPage() {
             />
           </div>
 
-          {/* ==================== ACTIONS ==================== */}
+          {/* =================================================
+              ACTIONS
+          ================================================= */}
+
           <div className="flex items-center gap-3 mt-6 flex-wrap">
-            {/* Quantity Selector */}
+            {/* Quantity */}
+
             <div className="flex items-center border border-[color:var(--border)] rounded-full">
               <button
                 type="button"
                 onClick={() =>
-                  setQty((current) => Math.max(1, current - 1))
+                  setQty(
+                    (
+                      current
+                    ) =>
+                      Math.max(
+                        1,
+                        current -
+                          1
+                      )
+                  )
                 }
                 className="p-2.5 cursor-pointer hover:bg-[color:var(--panel)] rounded-full transition-colors"
                 aria-label="Decrease quantity"
@@ -240,7 +665,13 @@ function ProductPage() {
               <button
                 type="button"
                 onClick={() =>
-                  setQty((current) => current + 1)
+                  setQty(
+                    (
+                      current
+                    ) =>
+                      current +
+                      1
+                  )
                 }
                 className="p-2.5 cursor-pointer hover:bg-[color:var(--panel)] rounded-full transition-colors"
                 aria-label="Increase quantity"
@@ -250,27 +681,44 @@ function ProductPage() {
             </div>
 
             {/* Add To Cart */}
+
             <button
               type="button"
-              onClick={() => actions.addToCart(p.id, qty)}
+              onClick={() =>
+                actions.addToCart(
+                  p.id,
+                  qty
+                )
+              }
               className="pill-gold cursor-pointer"
             >
               Add to Cart
             </button>
 
             {/* Buy Now */}
+
             <Link
               to="/checkout"
-              onClick={() => actions.addToCart(p.id, qty)}
+              onClick={() =>
+                actions.addToCart(
+                  p.id,
+                  qty
+                )
+              }
               className="pill-gold-outline cursor-pointer"
             >
               Buy Now
             </Link>
 
             {/* Wishlist */}
+
             <button
               type="button"
-              onClick={() => actions.toggleWishlist(p.id)}
+              onClick={() =>
+                actions.toggleWishlist(
+                  p.id
+                )
+              }
               className="w-11 h-11 rounded-full border border-[color:var(--gold)] grid place-items-center cursor-pointer hover:bg-[color:var(--panel)] transition-colors"
               aria-label={
                 saved
@@ -288,10 +736,14 @@ function ProductPage() {
             </button>
           </div>
 
-          {/* Description */}
+          {/* =================================================
+              DESCRIPTION
+          ================================================= */}
+
           <div className="mt-8 pt-6 border-t border-[color:var(--border)]">
             <p className="text-sm text-[color:var(--muted-foreground)] leading-relaxed whitespace-pre-line">
-              {rawDesc.length > 0
+              {rawDesc.length >
+              0
                 ? rawDesc
                 : `${p.name} — crafted in ${
                     p.purity
@@ -305,6 +757,10 @@ function ProductPage() {
     </Layout>
   );
 }
+
+/* =========================================================
+   PRICE BREAKDOWN ROW
+========================================================= */
 
 function BreakdownRow({
   l,
@@ -323,8 +779,13 @@ function BreakdownRow({
           : "text-[color:var(--muted-foreground)]"
       }`}
     >
-      <span>{l}</span>
-      <span>{formatINR(v)}</span>
+      <span>
+        {l}
+      </span>
+
+      <span>
+        {formatINR(v)}
+      </span>
     </div>
   );
 }

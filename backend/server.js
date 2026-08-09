@@ -19,6 +19,7 @@ const wishlistRoutes = require("./routes/wishlistRoutes");
 const cartRoutes = require("./routes/cartRoutes");
 const reelRoutes = require("./routes/reelRoutes");
 const shiprocketRoutes = require("./routes/shiprocket");
+const customerDiscountRoutes = require("./routes/customerDiscountRoutes");
 
 const app = express();
 
@@ -90,6 +91,7 @@ app.use("/api/cart", protect, cartRoutes);
 app.use("/api/reels", reelRoutes);
 app.use("/api/shiprocket", protect, shiprocketRoutes);
 app.use("/api/orders", protect, orderRoutes);
+app.use("/api/discounts", customerDiscountRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
