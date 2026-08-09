@@ -3,6 +3,7 @@ import {
   Link,
   useNavigate,
 } from "@tanstack/react-router";
+
 import {
   useEffect,
   useState,
@@ -16,7 +17,9 @@ import {
   api,
   addressesApi,
   productsApi,
+  discountsApi,
   type ProductItem,
+  type Discount,
 } from "@/lib/api";
 
 import {
@@ -63,10 +66,26 @@ type RazorpayResponse = {
 type InitiatePaymentResponse = {
   success: boolean;
   message?: string;
+
   razorpayOrder?: RazorpayOrder;
+
   subTotal?: number;
+
+  /*
+   * IMPORTANT:
+   *
+   * This is the TOTAL backend discount.
+   *
+   * It may contain:
+   *
+   * - seasonal discount
+   * - customer discount
+   * - coupon discount
+   */
   discount?: number;
+
   total?: number;
+
   coupon?: {
     id: string;
     code: string;
@@ -77,12 +96,15 @@ type InitiatePaymentResponse = {
 type VerifyOrderResponse = {
   success: boolean;
   message?: string;
+
   order?: unknown;
+
   pricing?: {
     subTotal: number;
     discount: number;
     total: number;
   };
+
   coupon?: {
     id: string;
     code: string;
@@ -142,7 +164,7 @@ const productCache: Record<
 > = {};
 
 /* =========================================================
-   CHECKOUT
+   CHECKOUT PAGE
 ========================================================= */
 
 export function Checkout() {
@@ -164,10 +186,17 @@ export function Checkout() {
   ======================================================= */
 
   const [coupon, setCoupon] = useState("");
+
   const [appliedCoupon, setAppliedCoupon] =
     useState<string | null>(null);
 
-  const [couponDiscount, setCouponDiscount] =
+  /*
+   * This is the TOTAL discount returned by
+   * the backend after payment initiation.
+   *
+   * It is NOT necessarily coupon-only discount.
+   */
+  const [backendDiscount, setBackendDiscount] =
     useState(0);
 
   const [backendSubtotal, setBackendSubtotal] =
@@ -180,7 +209,19 @@ export function Checkout() {
     useState("");
 
   /* =======================================================
-     PRODUCT STATES
+     CUSTOMER DISCOUNT
+  ======================================================= */
+
+  const [customerDiscount, setCustomerDiscount] =
+    useState<Discount | null>(null);
+
+  const [
+    loadingCustomerDiscount,
+    setLoadingCustomerDiscount,
+  ] = useState(false);
+
+  /* =======================================================
+     PRODUCTS
   ======================================================= */
 
   const [productsMap, setProductsMap] =
@@ -192,7 +233,7 @@ export function Checkout() {
     useState(false);
 
   /* =======================================================
-     ADDRESS STATES
+     ADDRESSES
   ======================================================= */
 
   const [addresses, setAddresses] =
@@ -242,6 +283,85 @@ export function Checkout() {
       setPhone(user.phone);
     }
   }, [user, phone]);
+
+  /* =======================================================
+     LOAD CUSTOMER DISCOUNT
+  ======================================================= */
+
+  useEffect(() => {
+    if (!user) {
+      setCustomerDiscount(null);
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadCustomerDiscount() {
+      setLoadingCustomerDiscount(true);
+
+      try {
+        /*
+         * IMPORTANT:
+         *
+         * discountsApi.getAvailable()
+         * already calls:
+         *
+         * GET /discounts/available
+         *
+         * with the authentication token.
+         */
+
+        const discounts =
+          await discountsApi.getAvailable();
+
+        if (!isMounted) {
+          return;
+        }
+
+        /*
+         * Find the discount assigned specifically
+         * to this customer.
+         */
+
+        const customerDiscounts =
+          discounts.filter(
+            (discount) =>
+              discount.type === "CUSTOMER" &&
+              discount.target === "CUSTOMER"
+          );
+
+        /*
+         * Usually there should be only one.
+         *
+         * If multiple exist, keep the first one
+         * returned by backend.
+         */
+
+        setCustomerDiscount(
+          customerDiscounts[0] || null
+        );
+      } catch (error) {
+        console.error(
+          "Failed to load customer discount:",
+          error
+        );
+
+        if (isMounted) {
+          setCustomerDiscount(null);
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingCustomerDiscount(false);
+        }
+      }
+    }
+
+    loadCustomerDiscount();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
 
   /* =======================================================
      LOAD RAZORPAY SDK
@@ -348,6 +468,18 @@ export function Checkout() {
                 weight: Number(
                   product.weight ??
                     product.grossWeight ??
+                    0
+                ),
+
+                va: Number(
+                  product.va ??
+                    product.making ??
+                    0
+                ),
+
+                making: Number(
+                  product.making ??
+                    product.va ??
                     0
                 ),
               };
@@ -535,7 +667,7 @@ export function Checkout() {
   );
 
   /* =======================================================
-     FRONTEND DISPLAY SUBTOTAL
+     FRONTEND CALCULATED SUBTOTAL
   ======================================================= */
 
   const calculatedSubtotal =
@@ -571,13 +703,80 @@ export function Checkout() {
       0
     );
 
+  /* =======================================================
+     CART VA TOTAL
+  ======================================================= */
+
   /*
-   * Backend is the source of truth after
-   * payment initiation.
+   * Customer discounts apply ONLY to VA /
+   * making charges.
    *
-   * Until then, show the calculated
-   * frontend subtotal.
+   * They do NOT apply to the complete
+   * jewellery price.
    */
+
+  const cartVaTotal = items.reduce(
+    (sum, item) => {
+      const vaAmount =
+        Number(
+          item.p.va ??
+            item.p.making ??
+            0
+        );
+
+      return (
+        sum +
+        vaAmount *
+          item.qty
+      );
+    },
+    0
+  );
+
+  /* =======================================================
+     CUSTOMER DISCOUNT AMOUNT
+  ======================================================= */
+
+  const customerDiscountAmount =
+    customerDiscount &&
+    cartVaTotal > 0
+      ? customerDiscount.kind ===
+        "percent"
+        ? Math.min(
+            (cartVaTotal *
+              Number(
+                customerDiscount.value
+              )) /
+              100,
+            cartVaTotal
+          )
+        : Math.min(
+            Number(
+              customerDiscount.value
+            ),
+            cartVaTotal
+          )
+      : 0;
+
+  /* =======================================================
+     DISPLAY TOTAL
+  ======================================================= */
+
+  /*
+   * Before backend payment initiation:
+   *
+   * We can show an estimated total after
+   * the customer's assigned discount.
+   *
+   * Backend remains the source of truth.
+   */
+
+  const estimatedCustomerTotal =
+    Math.max(
+      calculatedSubtotal -
+        customerDiscountAmount,
+      0
+    );
 
   const displaySubtotal =
     backendSubtotal ??
@@ -585,29 +784,33 @@ export function Checkout() {
 
   const displayTotal =
     backendTotal ??
-    calculatedSubtotal;
+    estimatedCustomerTotal;
 
   /* =======================================================
-     CLEAR APPLIED COUPON
+     CLEAR COUPON
   ======================================================= */
 
   function clearCoupon() {
     setCoupon("");
     setAppliedCoupon(null);
-    setCouponDiscount(0);
+    setBackendDiscount(0);
     setBackendSubtotal(null);
     setBackendTotal(null);
     setCouponError("");
   }
 
   /* =======================================================
-     INITIATE PAYMENT
+     PLACE ORDER
   ======================================================= */
 
   async function handlePlaceOrder(
     event: FormEvent
   ) {
     event.preventDefault();
+
+    /* -------------------------------------------------------
+       PHONE
+    ------------------------------------------------------- */
 
     if (!phone.trim()) {
       alert(
@@ -629,6 +832,10 @@ export function Checkout() {
       return;
     }
 
+    /* -------------------------------------------------------
+       ADDRESS
+    ------------------------------------------------------- */
+
     if (!selectedAddressId) {
       alert(
         "Please select a shipping address."
@@ -636,6 +843,10 @@ export function Checkout() {
 
       return;
     }
+
+    /* -------------------------------------------------------
+       CART
+    ------------------------------------------------------- */
 
     if (items.length === 0) {
       alert(
@@ -657,17 +868,17 @@ export function Checkout() {
     setCouponError("");
 
     try {
-      /* ===================================================
+      /* =====================================================
          SAVE PHONE
-      =================================================== */
+      ===================================================== */
 
       await api.updateProfile({
         phone: phone.trim(),
       });
 
-      /* ===================================================
+      /* =====================================================
          REFRESH AUTH USER
-      =================================================== */
+      ===================================================== */
 
       if (
         typeof actions.checkAuth ===
@@ -676,20 +887,19 @@ export function Checkout() {
         await actions.checkAuth();
       }
 
-      /*
-       * Normalize coupon once.
-       *
-       * Empty coupon = null.
-       */
+      /* =====================================================
+         NORMALIZE COUPON
+      ===================================================== */
 
       const couponCode =
         coupon.trim()
-          ? coupon.trim().toUpperCase()
+          ? coupon
+              .trim()
+              .toUpperCase()
           : undefined;
 
       /*
-       * Remember the coupon that was actually
-       * submitted to the backend.
+       * Remember coupon submitted by customer.
        */
 
       if (couponCode) {
@@ -698,10 +908,10 @@ export function Checkout() {
         );
       }
 
-      /* ===================================================
+      /* =====================================================
          STEP 1
-         BACKEND CALCULATES REAL TOTAL
-      =================================================== */
+         INITIATE PAYMENT
+      ===================================================== */
 
       const paymentResponse =
         (await api.post(
@@ -722,6 +932,10 @@ export function Checkout() {
         );
       }
 
+      /* =====================================================
+         RAZORPAY ORDER
+      ===================================================== */
+
       const razorpayOrder =
         paymentResponse.razorpayOrder;
 
@@ -731,11 +945,9 @@ export function Checkout() {
         );
       }
 
-      /*
-       * IMPORTANT:
-       *
-       * Backend is now the source of truth.
-       */
+      /* =====================================================
+         BACKEND PRICING
+      ===================================================== */
 
       if (
         typeof paymentResponse.subTotal ===
@@ -755,11 +967,18 @@ export function Checkout() {
         );
       }
 
+      /*
+       * IMPORTANT:
+       *
+       * Backend discount is the complete discount,
+       * not coupon-only discount.
+       */
+
       if (
         typeof paymentResponse.discount ===
         "number"
       ) {
-        setCouponDiscount(
+        setBackendDiscount(
           paymentResponse.discount
         );
       }
@@ -772,12 +991,11 @@ export function Checkout() {
         );
       } else if (!couponCode) {
         setAppliedCoupon(null);
-        setCouponDiscount(0);
       }
 
-      /* ===================================================
+      /* =====================================================
          CHECK RAZORPAY SDK
-      =================================================== */
+      ===================================================== */
 
       if (
         typeof window.Razorpay !==
@@ -788,16 +1006,15 @@ export function Checkout() {
         );
       }
 
-      /* ===================================================
+      /* =====================================================
          RAZORPAY OPTIONS
-      =================================================== */
+      ===================================================== */
 
       const options: RazorpayOptions = {
         /*
-         * TEST KEY.
+         * TEST KEY
          *
-         * Replace with your live key when
-         * production payments are enabled.
+         * Replace with live key for production.
          */
 
         key:
@@ -806,8 +1023,7 @@ export function Checkout() {
         /*
          * IMPORTANT:
          *
-         * This amount comes directly from
-         * backend Razorpay order.
+         * This comes directly from backend.
          */
 
         amount:
@@ -822,29 +1038,32 @@ export function Checkout() {
         name:
           "NVS Jewellery",
 
+        /*
+         * Use couponCode directly instead of
+         * appliedCoupon state because React state
+         * updates asynchronously.
+         */
+
         description:
-          appliedCoupon
-            ? `Jewellery Purchase - ${appliedCoupon}`
+          couponCode
+            ? `Jewellery Purchase - ${couponCode}`
             : "Jewellery Purchase Checkout",
 
         image:
           "/favicon.ico",
 
-        /* ===============================================
+        /* ===================================================
            PAYMENT SUCCESS
-        =============================================== */
+        =================================================== */
 
         handler:
           async function (
             response
           ) {
             try {
-              /*
-               * IMPORTANT:
-               *
-               * Send the same coupon to backend
-               * during verification.
-               */
+              /* =============================================
+                 VERIFY PAYLOAD
+              ============================================= */
 
               const verifyPayload: Record<
                 string,
@@ -866,15 +1085,20 @@ export function Checkout() {
                   phone.trim(),
               };
 
+              /*
+               * Send exactly the same coupon used
+               * during payment initiation.
+               */
+
               if (couponCode) {
                 verifyPayload.couponCode =
                   couponCode;
               }
 
-              /* =========================================
+              /* =============================================
                  STEP 2
                  VERIFY + PLACE ORDER
-              ========================================= */
+              ============================================= */
 
               const result =
                 (await api.post(
@@ -891,15 +1115,15 @@ export function Checkout() {
                 );
               }
 
-              /* =========================================
+              /* =============================================
                  CLEAR LOCAL CART
-              ========================================= */
+              ============================================= */
 
               actions.clearCart();
 
-              /* =========================================
+              /* =============================================
                  GO TO ACCOUNT
-              ========================================= */
+              ============================================= */
 
               navigate({
                 to: "/account",
@@ -920,9 +1144,9 @@ export function Checkout() {
             }
           },
 
-        /* ===============================================
+        /* ===================================================
            PREFILL
-        =============================================== */
+        =================================================== */
 
         prefill: {
           name:
@@ -937,18 +1161,18 @@ export function Checkout() {
             phone.trim(),
         },
 
-        /* ===============================================
+        /* ===================================================
            THEME
-        =============================================== */
+        =================================================== */
 
         theme: {
           color:
             "#B8860B",
         },
 
-        /* ===============================================
+        /* ===================================================
            MODAL
-        =============================================== */
+        =================================================== */
 
         modal: {
           ondismiss:
@@ -958,9 +1182,9 @@ export function Checkout() {
         },
       };
 
-      /* =================================================
+      /* =====================================================
          OPEN RAZORPAY
-      ================================================= */
+      ===================================================== */
 
       const razorpay =
         new window.Razorpay(
@@ -973,11 +1197,6 @@ export function Checkout() {
         "Checkout/payment initiation failed:",
         error
       );
-
-      /*
-       * If the backend rejected the coupon,
-       * display the error clearly.
-       */
 
       if (
         error instanceof Error &&
@@ -1019,7 +1238,7 @@ export function Checkout() {
         <OrnamentalDivider />
 
         {/* =================================================
-            LOADING PRODUCTS
+            LOADING / EMPTY CART
         ================================================= */}
 
         {loadingProducts &&
@@ -1031,10 +1250,6 @@ export function Checkout() {
             </p>
           </div>
         ) : items.length === 0 ? (
-          /* =================================================
-             EMPTY CART
-          ================================================= */
-
           <div className="text-center py-20 bg-white border border-[color:var(--border)] rounded-2xl mt-6">
 
             <h2 className="font-serif text-2xl text-[color:var(--espresso)]">
@@ -1052,6 +1267,7 @@ export function Checkout() {
             >
               Browse Collection
             </Link>
+
           </div>
         ) : (
           /* =================================================
@@ -1119,7 +1335,7 @@ export function Checkout() {
                           className="pt-4 first:pt-0 flex items-center justify-between gap-4"
                         >
 
-                          {/* Product */}
+                          {/* PRODUCT */}
 
                           <div className="flex items-center gap-4 min-w-0">
 
@@ -1151,7 +1367,9 @@ export function Checkout() {
                               </h4>
 
                               <p className="text-xs text-[color:var(--muted-foreground)] mt-0.5">
+
                                 Weight:{" "}
+
                                 <span className="font-semibold text-[color:var(--espresso)]">
                                   {
                                     weightVal
@@ -1162,6 +1380,7 @@ export function Checkout() {
                                 {" · "}
 
                                 Purity:{" "}
+
                                 <span className="font-semibold text-[color:var(--espresso)]">
                                   {
                                     item
@@ -1170,6 +1389,7 @@ export function Checkout() {
                                     "22K"
                                   }
                                 </span>
+
                               </p>
 
                               <p className="text-xs text-[color:var(--gold-dark)] font-semibold mt-1">
@@ -1180,9 +1400,10 @@ export function Checkout() {
                               </p>
 
                             </div>
+
                           </div>
 
-                          {/* Item Price */}
+                          {/* ITEM PRICE */}
 
                           <div className="text-right shrink-0">
 
@@ -1194,6 +1415,7 @@ export function Checkout() {
                             </p>
 
                           </div>
+
                         </div>
                       );
                     }
@@ -1279,7 +1501,7 @@ export function Checkout() {
                 ) : showAddForm ? (
 
                   /* =======================================
-                     ADD ADDRESS FORM
+                     ADD ADDRESS
                   ======================================= */
 
                   <div className="space-y-3 pt-2 border-t border-[color:var(--border)]">
@@ -1424,7 +1646,9 @@ export function Checkout() {
                       </button>
 
                     </div>
+
                   </div>
+
                 ) : addresses.length > 0 ? (
 
                   /* =======================================
@@ -1476,17 +1700,22 @@ export function Checkout() {
                           </p>
 
                           <p className="text-xs text-[color:var(--muted-foreground)] mt-0.5">
+
                             {
                               address.city
                             }
                             ,{" "}
+
                             {
                               address.state
                             }{" "}
+
                             —{" "}
+
                             {
                               address.pincode
                             }
+
                           </p>
 
                         </div>
@@ -1494,6 +1723,7 @@ export function Checkout() {
                     )}
 
                   </div>
+
                 ) : (
 
                   /* =======================================
@@ -1506,13 +1736,14 @@ export function Checkout() {
                     "+ Add New Address"
                     above.
                   </p>
+
                 )}
 
               </div>
             </div>
 
             {/* =============================================
-               RIGHT SIDE — ORDER SUMMARY
+               RIGHT SIDE
             ============================================= */}
 
             <div className="bg-[color:var(--panel)] rounded-2xl p-6 h-fit border border-[color:var(--border)] shadow-xs">
@@ -1520,6 +1751,10 @@ export function Checkout() {
               <h3 className="font-serif text-xl text-[color:var(--espresso)] mb-4">
                 Order Summary
               </h3>
+
+              {/* =========================================
+                  ITEMS
+              ========================================= */}
 
               <div className="space-y-3 text-sm divide-y divide-[color:var(--border)]/60">
 
@@ -1569,18 +1804,23 @@ export function Checkout() {
                           </p>
 
                           <p className="text-xs text-[color:var(--muted-foreground)]">
+
                             {
                               weightVal
                             }g ·{" "}
+
                             {
                               item.p
                                 .purity ||
                               "22K"
                             }{" "}
+
                             ×{" "}
+
                             {
                               item.qty
                             }
+
                           </p>
 
                         </div>
@@ -1600,14 +1840,19 @@ export function Checkout() {
               </div>
 
               {/* =========================================
-                  PRICING
+                  PRICING DIVIDER
               ========================================= */}
 
               <div className="h-px bg-[color:var(--gold)]/30 my-4" />
 
+              {/* =========================================
+                  SUBTOTAL
+              ========================================= */}
+
               <div className="space-y-1">
 
                 <div className="flex justify-between text-sm">
+
                   <span className="text-[color:var(--muted-foreground)]">
                     Subtotal
                   </span>
@@ -1617,23 +1862,98 @@ export function Checkout() {
                       displaySubtotal
                     )}
                   </span>
+
                 </div>
 
-                {couponDiscount > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-green-700">
-                      Discount
-                    </span>
+                {/* =======================================
+                    CUSTOMER DISCOUNT
+                ======================================= */}
 
-                    <span className="text-green-700 font-medium">
-                      -{formatINR(
-                        couponDiscount
-                      )}
-                    </span>
-                  </div>
-                )}
+                {customerDiscount &&
+                  customerDiscountAmount >
+                    0 && (
+                    <div className="mt-3 rounded-xl border border-[color:var(--gold)]/30 bg-[color:var(--cream)]/40 p-3">
 
-                <div className="flex justify-between font-bold text-lg text-[color:var(--espresso)] pt-2">
+                      <div className="flex items-center justify-between gap-3">
+
+                        <div>
+
+                          <p className="text-xs font-semibold text-[color:var(--gold-dark)]">
+                            Your Special Discount
+                          </p>
+
+                          <p className="text-xs text-[color:var(--muted-foreground)] mt-0.5">
+                            {
+                              customerDiscount.name ||
+                              "Customer Discount"
+                            }
+                          </p>
+
+                        </div>
+
+                        <span className="text-sm font-bold text-green-700 whitespace-nowrap">
+
+                          {customerDiscount.kind ===
+                          "percent"
+                            ? `${customerDiscount.value}% OFF`
+                            : `${formatINR(
+                                Number(
+                                  customerDiscount.value
+                                )
+                              )} OFF`}
+
+                        </span>
+
+                      </div>
+
+                      <div className="flex justify-between text-sm mt-2">
+
+                        <span className="text-green-700">
+                          Customer discount
+                        </span>
+
+                        <span className="text-green-700 font-medium">
+                          -{formatINR(
+                            customerDiscountAmount
+                          )}
+                        </span>
+
+                      </div>
+
+                      <p className="text-[10px] text-[color:var(--muted-foreground)] mt-1">
+                        Applied to making / VA charges.
+                      </p>
+
+                    </div>
+                  )}
+
+                {/* =======================================
+                    COUPON / BACKEND DISCOUNT
+                ======================================= */}
+
+                {backendDiscount > 0 &&
+                  backendTotal !== null && (
+                    <div className="flex justify-between text-sm mt-2">
+
+                      <span className="text-green-700">
+                        Total discount
+                      </span>
+
+                      <span className="text-green-700 font-medium">
+                        -{formatINR(
+                          backendDiscount
+                        )}
+                      </span>
+
+                    </div>
+                  )}
+
+                {/* =======================================
+                    TOTAL
+                ======================================= */}
+
+                <div className="flex justify-between font-bold text-lg text-[color:var(--espresso)] pt-3">
+
                   <span>
                     Total Payable
                   </span>
@@ -1643,9 +1963,21 @@ export function Checkout() {
                       displayTotal
                     )}
                   </span>
+
                 </div>
 
               </div>
+
+              {/* =========================================
+                  CUSTOMER DISCOUNT LOADING
+              ========================================= */}
+
+              {loadingCustomerDiscount && (
+                <p className="text-[10px] text-[color:var(--muted-foreground)] mt-2">
+                  Checking your special
+                  discounts...
+                </p>
+              )}
 
               {/* =========================================
                   COUPON
@@ -1669,16 +2001,17 @@ export function Checkout() {
                       );
 
                       /*
-                       * If user changes the coupon,
-                       * previous backend pricing is no
-                       * longer valid.
+                       * Coupon changed.
+                       *
+                       * Previously calculated backend
+                       * pricing is no longer valid.
                        */
 
                       setAppliedCoupon(
                         null
                       );
 
-                      setCouponDiscount(
+                      setBackendDiscount(
                         0
                       );
 
@@ -1712,7 +2045,7 @@ export function Checkout() {
                 </div>
 
                 {appliedCoupon &&
-                  couponDiscount > 0 && (
+                  couponError === "" && (
                     <p className="text-xs text-green-700 font-medium mt-2">
                       Coupon{" "}
                       <strong>
