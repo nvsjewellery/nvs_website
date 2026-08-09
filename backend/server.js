@@ -13,10 +13,7 @@ const {
   errorHandler,
 } = require("./middleware/errorMiddleware");
 
-// ============================================================
-// IMPORT ROUTES
-// ============================================================
-
+// Routes
 const authRoutes = require("./routes/authRoutes");
 const productRoutes = require("./routes/productRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
@@ -29,22 +26,10 @@ const reelRoutes = require("./routes/reelRoutes");
 const shiprocketRoutes = require("./routes/shiprocket");
 const customerDiscountRoutes = require("./routes/customerDiscountRoutes");
 
-const {
-  protect,
-} = require("./middleware/authMiddleware");
-
-// ============================================================
-// APP
-// ============================================================
+const { protect } = require("./middleware/authMiddleware");
 
 const app = express();
-
-// Disable x-powered-by header
 app.disable("x-powered-by");
-
-// ============================================================
-// ALLOWED ORIGINS
-// ============================================================
 
 const allowedOrigins = [
   "https://nvsjewellery.com",
@@ -54,43 +39,36 @@ const allowedOrigins = [
 ];
 
 // ============================================================
-// CORS MIDDLEWARE
+// MANUAL CORS & PREFLIGHT HANDLER
 // ============================================================
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
 
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      if (!origin) return callback(null, true);
+  const isAllowed =
+    !origin ||
+    allowedOrigins.includes(origin) ||
+    (process.env.CLIENT_URL && origin === process.env.CLIENT_URL) ||
+    origin.endsWith(".vercel.app");
 
-      const isAllowed =
-        allowedOrigins.includes(origin) ||
-        (process.env.CLIENT_URL && origin === process.env.CLIENT_URL) ||
-        origin.endsWith(".vercel.app");
+  if (isAllowed && origin) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
 
-      if (isAllowed) {
-        return callback(null, true);
-      } else {
-        return callback(null, false);
-      }
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: [
-      "Content-Type",
-      "Authorization",
-      "X-Requested-With",
-      "Accept",
-    ],
-  })
-);
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept");
 
-// Handle OPTIONS preflight explicit response
-app.options("*", cors());
+  // IMMEDIATELY RETURN 200 OK FOR ALL PREFLIGHT OPTIONS REQUESTS
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
+  next();
+});
 
 // ============================================================
-// HELMET
+// HELMET (SAFE FOR CORS)
 // ============================================================
-
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" },
@@ -98,104 +76,50 @@ app.use(
   })
 );
 
-// ============================================================
-// BODY PARSERS
-// ============================================================
-
-app.use(
-  express.json({
-    limit: "10kb",
-  })
-);
-
+app.use(express.json({ limit: "10kb" }));
 app.use(cookieParser());
-
-// ============================================================
-// LOGGER
-// ============================================================
 
 if (process.env.NODE_ENV !== "production") {
   app.use(morgan("dev"));
 }
 
-// ============================================================
-// HEALTH / ROOT
-// ============================================================
-
+// Health check
 app.get("/", (req, res) => {
-  res.json({
-    status: "ok",
-    message: "NVS Backend API Active",
-  });
+  res.json({ status: "ok", message: "NVS Backend Active" });
 });
 
 app.get("/api/health", (req, res) => {
-  res.json({
-    status: "ok",
-  });
+  res.json({ status: "ok" });
 });
 
-// ============================================================
-// PUBLIC API ROUTES
-// ============================================================
-
+// Public Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/rates", ratesRoutes);
 app.use("/api/reels", reelRoutes);
 
-// ============================================================
-// PROTECTED API ROUTES
-// ============================================================
-
+// Protected Routes
 app.use("/api/addresses", protect, addressRoutes);
 app.use("/api/wishlist", protect, wishlistRoutes);
 app.use("/api/cart", protect, cartRoutes);
 app.use("/api/shiprocket", protect, shiprocketRoutes);
 app.use("/api/orders", protect, orderRoutes);
-
-// ============================================================
-// DISCOUNTS
-// ============================================================
-
 app.use("/api/discounts", protect, customerDiscountRoutes);
 
-// ============================================================
-// 404 HANDLER
-// ============================================================
-
+// Error handling
 app.use(notFound);
-
-// ============================================================
-// GLOBAL ERROR HANDLER
-// ============================================================
-
 app.use(errorHandler);
-
-// ============================================================
-// LOCAL DATABASE CONNECTION
-// ============================================================
 
 if (process.env.VERCEL !== "1") {
   const PORT = process.env.PORT || 5000;
-
   prisma
     .$connect()
     .then(() => {
-      console.log("✅ PostgreSQL connected via Prisma");
-
-      app.listen(PORT, () => {
-        console.log(`🚀 Server running on port ${PORT}`);
-      });
+      console.log("✅ PostgreSQL connected");
+      app.listen(PORT, () => console.log(`🚀 Server on port ${PORT}`));
     })
-    .catch((err) => {
-      console.error("❌ DB connection failed:", err.message);
-    });
+    .catch((err) => console.error("❌ DB connection failed:", err.message));
 }
-
-// ============================================================
-// EXPORT APP
-// ============================================================
 
 module.exports = app;
