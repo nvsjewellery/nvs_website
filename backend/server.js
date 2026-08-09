@@ -39,39 +39,45 @@ const allowedOrigins = [
 ];
 
 // ============================================================
-// MANUAL CORS & PREFLIGHT HANDLER
+// CORS (Standard Middleware)
 // ============================================================
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin) return callback(null, true);
 
-  const isAllowed =
-    !origin ||
-    allowedOrigins.includes(origin) ||
-    (process.env.CLIENT_URL && origin === process.env.CLIENT_URL) ||
-    origin.endsWith(".vercel.app");
+      const isAllowed =
+        allowedOrigins.includes(origin) ||
+        (process.env.CLIENT_URL && origin === process.env.CLIENT_URL) ||
+        origin.endsWith(".vercel.app");
 
-  if (isAllowed && origin) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-  }
+      if (isAllowed) {
+        return callback(null, true);
+      } else {
+        return callback(null, false);
+      }
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+      "Accept",
+    ],
+    optionsSuccessStatus: 200,
+  })
+);
 
-  res.setHeader("Access-Control-Allow-Credentials", "true");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept");
-
-  // IMMEDIATELY RETURN 200 OK FOR ALL PREFLIGHT OPTIONS REQUESTS
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
-
-  next();
-});
+// Explicit OPTIONS preflight handling across all routes
+app.options("*", cors());
 
 // ============================================================
-// HELMET (SAFE FOR CORS)
+// HELMET
 // ============================================================
 app.use(
   helmet({
-    crossOriginResourcePolicy: { policy: "cross-origin" },
+    crossOriginResourcePolicy: false,
     crossOriginOpenerPolicy: false,
   })
 );
