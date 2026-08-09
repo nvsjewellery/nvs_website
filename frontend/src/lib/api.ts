@@ -83,29 +83,66 @@ export interface Category {
 
 export interface ProductItem {
   id: string;
+
   name: string;
-  metal: string;
+
+  metal: "Gold" | "Silver" | string;
+
   sub?: string;
+
   category?: string;
+
   purity: string;
 
+  // Weight
   weight?: number;
   grossWeight?: number;
+  stoneWeight?: number;
 
+  // Stone
+  stoneCost?: number;
+
+  // Pricing
   price: number;
 
+  // Product details
   gemstone?: string;
+
+  /*
+   * Primary image.
+   *
+   * Kept for backward compatibility
+   * with older products/components.
+   */
   image: string;
+
+  /*
+   * Product gallery.
+   *
+   * Maximum 4 image URLs.
+   */
+  images?: string[];
 
   description?: string;
   desc?: string;
   details?: string;
 
+  // Pricing breakdown
   va?: number;
   making?: number;
-
   metalValue?: number;
   gst?: number;
+
+  // Additional product fields
+  stock?: number;
+  sold?: number;
+  status?: string;
+  sku?: string;
+  hallmarkId?: string;
+
+  // Silver
+  isDirectSterling?: boolean;
+  pieceCost?: number;
 }
 
 // ============================================================
@@ -167,7 +204,9 @@ export interface Discount {
 
   metal?: "Gold" | "Silver" | null;
   category?: string | null;
+
   products?: DiscountProduct[];
+
   userId?: string | null;
 
   startDate?: string | null;
@@ -210,27 +249,31 @@ async function request<T = unknown>(
 ): Promise<ApiResponse<T>> {
   const token = getToken();
 
-  const res = await fetch(`${API_URL}${endpoint}`, {
-    ...options,
+  const res = await fetch(
+    `${API_URL}${endpoint}`,
+    {
+      ...options,
 
-    headers: {
-      "Content-Type": "application/json",
+      headers: {
+        "Content-Type": "application/json",
 
-      ...(token
-        ? {
-            Authorization: `Bearer ${token}`,
-          }
-        : {}),
+        ...(token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {}),
 
-      ...options.headers,
-    },
-  });
+        ...options.headers,
+      },
+    }
+  );
 
   const data = await res.json();
 
   if (!res.ok) {
     throw new Error(
-      data.message || "Something went wrong"
+      data.message ||
+        "Something went wrong"
     );
   }
 
@@ -252,23 +295,28 @@ export const api = {
     });
   },
 
+  // ----------------------------------------------------------
+  // REGISTER
+  // ----------------------------------------------------------
+
   async register(
     name: string,
     email: string,
     password: string
   ) {
-    const res = await request<User>(
-      "/auth/register",
-      {
-        method: "POST",
+    const res =
+      await request<User>(
+        "/auth/register",
+        {
+          method: "POST",
 
-        body: JSON.stringify({
-          name,
-          email,
-          password,
-        }),
-      }
-    );
+          body: JSON.stringify({
+            name,
+            email,
+            password,
+          }),
+        }
+      );
 
     if (res.token) {
       saveToken(res.token);
@@ -276,22 +324,74 @@ export const api = {
 
     return res;
   },
+
+  // ----------------------------------------------------------
+  // LOGIN
+  // ----------------------------------------------------------
 
   async login(
     email: string,
     password: string
   ) {
-    const res = await request<User>(
-      "/auth/login",
+    const res =
+      await request<User>(
+        "/auth/login",
+        {
+          method: "POST",
+
+          body: JSON.stringify({
+            email,
+            password,
+          }),
+        }
+      );
+
+    if (res.token) {
+      saveToken(res.token);
+    }
+
+    return res;
+  },
+
+  // ----------------------------------------------------------
+  // FORGOT PASSWORD
+  // ----------------------------------------------------------
+
+  async forgotPassword(
+    email: string
+  ) {
+    return request(
+      "/auth/forgot-password",
       {
         method: "POST",
 
         body: JSON.stringify({
           email,
-          password,
         }),
       }
     );
+  },
+
+  // ----------------------------------------------------------
+  // RESET PASSWORD
+  // ----------------------------------------------------------
+
+  async resetPassword(
+    token: string,
+    password: string
+  ) {
+    const res =
+      await request<User>(
+        "/auth/reset-password",
+        {
+          method: "POST",
+
+          body: JSON.stringify({
+            token,
+            password,
+          }),
+        }
+      );
 
     if (res.token) {
       saveToken(res.token);
@@ -300,31 +400,18 @@ export const api = {
     return res;
   },
 
-  async forgotPassword(email: string) {
-    return request("/auth/forgot-password", {
-      method: "POST",
-      body: JSON.stringify({ email }),
-    });
-  },
-
-  async resetPassword(token: string, password: string) {
-    const res = await request<User>("/auth/reset-password", {
-      method: "POST",
-      body: JSON.stringify({ token, password }),
-    });
-
-    if (res.token) {
-      saveToken(res.token);
-    }
-
-    return res;
-  },
+  // ----------------------------------------------------------
+  // LOGOUT
+  // ----------------------------------------------------------
 
   async logout() {
     try {
-      await request("/auth/logout", {
-        method: "POST",
-      });
+      await request(
+        "/auth/logout",
+        {
+          method: "POST",
+        }
+      );
     } finally {
       removeToken();
     }
@@ -334,20 +421,37 @@ export const api = {
     };
   },
 
+  // ----------------------------------------------------------
+  // GET CURRENT USER
+  // ----------------------------------------------------------
+
   getMe() {
-    return request<User>("/auth/me", {
-      method: "GET",
-    });
+    return request<User>(
+      "/auth/me",
+      {
+        method: "GET",
+      }
+    );
   },
+
+  // ----------------------------------------------------------
+  // UPDATE PROFILE
+  // ----------------------------------------------------------
 
   updateProfile(data: {
     phone?: string;
     name?: string;
   }) {
-    return request<User>("/auth/profile", {
-      method: "PATCH",
-      body: JSON.stringify(data),
-    });
+    return request<User>(
+      "/auth/profile",
+      {
+        method: "PATCH",
+
+        body: JSON.stringify(
+          data
+        ),
+      }
+    );
   },
 };
 
@@ -356,16 +460,27 @@ export const api = {
 // ============================================================
 
 export const addressesApi = {
-  async getAll(): Promise<AddressItem[]> {
-    const res = await request<AddressItem[]>(
-      "/addresses",
-      {
-        method: "GET",
-      }
-    );
+  // ----------------------------------------------------------
+  // GET ALL
+  // ----------------------------------------------------------
+
+  async getAll(): Promise<
+    AddressItem[]
+  > {
+    const res =
+      await request<AddressItem[]>(
+        "/addresses",
+        {
+          method: "GET",
+        }
+      );
 
     return res.addresses ?? [];
   },
+
+  // ----------------------------------------------------------
+  // CREATE
+  // ----------------------------------------------------------
 
   async create(data: {
     label: string;
@@ -381,7 +496,9 @@ export const addressesApi = {
         {
           method: "POST",
 
-          body: JSON.stringify(data),
+          body: JSON.stringify(
+            data
+          ),
         }
       );
 
@@ -394,10 +511,17 @@ export const addressesApi = {
     return res.address;
   },
 
+  // ----------------------------------------------------------
+  // DELETE
+  // ----------------------------------------------------------
+
   async delete(id: string) {
-    return request(`/addresses/${id}`, {
-      method: "DELETE",
-    });
+    return request(
+      `/addresses/${id}`,
+      {
+        method: "DELETE",
+      }
+    );
   },
 };
 
@@ -406,7 +530,13 @@ export const addressesApi = {
 // ============================================================
 
 export const wishlistApi = {
-  async getAll(): Promise<string[]> {
+  // ----------------------------------------------------------
+  // GET ALL
+  // ----------------------------------------------------------
+
+  async getAll(): Promise<
+    string[]
+  > {
     const res =
       await request<string[]>(
         "/wishlist",
@@ -418,17 +548,32 @@ export const wishlistApi = {
     return res.wishlist ?? [];
   },
 
-  async add(productId: string) {
-    return request("/wishlist", {
-      method: "POST",
+  // ----------------------------------------------------------
+  // ADD
+  // ----------------------------------------------------------
 
-      body: JSON.stringify({
-        productId,
-      }),
-    });
+  async add(
+    productId: string
+  ) {
+    return request(
+      "/wishlist",
+      {
+        method: "POST",
+
+        body: JSON.stringify({
+          productId,
+        }),
+      }
+    );
   },
 
-  async remove(productId: string) {
+  // ----------------------------------------------------------
+  // REMOVE
+  // ----------------------------------------------------------
+
+  async remove(
+    productId: string
+  ) {
     return request(
       `/wishlist/${productId}`,
       {
@@ -443,7 +588,13 @@ export const wishlistApi = {
 // ============================================================
 
 export const cartApi = {
-  async getAll(): Promise<CartItem[]> {
+  // ----------------------------------------------------------
+  // GET ALL
+  // ----------------------------------------------------------
+
+  async getAll(): Promise<
+    CartItem[]
+  > {
     const res =
       await request<CartItem[]>(
         "/cart",
@@ -455,19 +606,30 @@ export const cartApi = {
     return res.cart ?? [];
   },
 
+  // ----------------------------------------------------------
+  // ADD
+  // ----------------------------------------------------------
+
   async add(
     productId: string,
     qty = 1
   ) {
-    return request("/cart", {
-      method: "POST",
+    return request(
+      "/cart",
+      {
+        method: "POST",
 
-      body: JSON.stringify({
-        productId,
-        qty,
-      }),
-    });
+        body: JSON.stringify({
+          productId,
+          qty,
+        }),
+      }
+    );
   },
+
+  // ----------------------------------------------------------
+  // UPDATE
+  // ----------------------------------------------------------
 
   async update(
     productId: string,
@@ -485,7 +647,13 @@ export const cartApi = {
     );
   },
 
-  async remove(productId: string) {
+  // ----------------------------------------------------------
+  // REMOVE
+  // ----------------------------------------------------------
+
+  async remove(
+    productId: string
+  ) {
     return request(
       `/cart/${productId}`,
       {
@@ -494,10 +662,17 @@ export const cartApi = {
     );
   },
 
+  // ----------------------------------------------------------
+  // CLEAR
+  // ----------------------------------------------------------
+
   async clear() {
-    return request("/cart", {
-      method: "DELETE",
-    });
+    return request(
+      "/cart",
+      {
+        method: "DELETE",
+      }
+    );
   },
 };
 
@@ -506,27 +681,187 @@ export const cartApi = {
 // ============================================================
 
 export const productsApi = {
+  // ==========================================================
+  // NORMALIZE PRODUCT
+  // ==========================================================
+
+  normalizeProduct(
+    raw: any
+  ): ProductItem {
+    /*
+     * Build the product gallery.
+     *
+     * New products:
+     *
+     * images = [
+     *   image1,
+     *   image2,
+     *   image3,
+     *   image4
+     * ]
+     *
+     * Older products:
+     *
+     * image = image1
+     *
+     * The fallback below keeps old products
+     * working without any database changes.
+     */
+
+    const gallery: string[] =
+      [];
+
+    // --------------------------------------------------------
+    // NEW IMAGES ARRAY
+    // --------------------------------------------------------
+
+    if (
+      Array.isArray(
+        raw?.images
+      )
+    ) {
+      for (
+        const image of raw.images
+      ) {
+        if (
+          typeof image ===
+            "string" &&
+          image.trim()
+        ) {
+          gallery.push(
+            image.trim()
+          );
+        }
+      }
+    }
+
+    // --------------------------------------------------------
+    // OLD PRIMARY IMAGE FALLBACK
+    // --------------------------------------------------------
+
+    if (
+      gallery.length === 0 &&
+      typeof raw?.image ===
+        "string" &&
+      raw.image.trim()
+    ) {
+      gallery.push(
+        raw.image.trim()
+      );
+    }
+
+    // --------------------------------------------------------
+    // REMOVE DUPLICATES
+    // MAXIMUM 4 IMAGES
+    // --------------------------------------------------------
+
+    const images =
+      Array.from(
+        new Set(gallery)
+      ).slice(0, 4);
+
+    // --------------------------------------------------------
+    // PRIMARY IMAGE
+    // --------------------------------------------------------
+
+    const primaryImage =
+      images[0] ??
+      (typeof raw?.image ===
+      "string"
+        ? raw.image
+        : "");
+
+    // --------------------------------------------------------
+    // RETURN NORMALIZED PRODUCT
+    // --------------------------------------------------------
+
+    return {
+      ...raw,
+
+      /*
+       * Primary image.
+       */
+      image:
+        primaryImage,
+
+      /*
+       * Complete gallery.
+       */
+      images,
+
+      /*
+       * Existing compatibility
+       * fields.
+       */
+
+      weight:
+        raw?.weight ??
+        raw?.grossWeight ??
+        0,
+
+      description:
+        raw?.description ??
+        raw?.desc ??
+        raw?.details ??
+        "",
+
+      va:
+        raw?.va ??
+        raw?.making ??
+        0,
+
+      making:
+        raw?.making ??
+        raw?.va ??
+        0,
+
+      metalValue:
+        raw?.metalValue ??
+        0,
+
+      gst:
+        raw?.gst ??
+        0,
+    } as ProductItem;
+  },
+
+  // ==========================================================
+  // GET PRODUCTS BY METAL
+  // ==========================================================
+
   async getByMetal(
     metal: "Gold" | "Silver"
   ): Promise<ProductItem[]> {
-    if (cache.products.has(metal)) {
-      return cache.products.get(metal)!;
+    /*
+     * Use cache if already loaded.
+     */
+
+    if (
+      cache.products.has(metal)
+    ) {
+      return cache.products.get(
+        metal
+      )!;
     }
 
-    const token = getToken();
+    const token =
+      getToken();
 
-    const res = await fetch(
-      `${API_URL}/products?metal=${metal}`,
-      {
-        headers: token
-          ? {
-              Authorization: `Bearer ${token}`,
-            }
-          : {},
-      }
-    );
+    const res =
+      await fetch(
+        `${API_URL}/products?metal=${metal}`,
+        {
+          headers: token
+            ? {
+                Authorization:
+                  `Bearer ${token}`,
+              }
+            : {},
+        }
+      );
 
-    const data = await res.json();
+    const data =
+      await res.json();
 
     if (!res.ok) {
       throw new Error(
@@ -535,8 +870,28 @@ export const productsApi = {
       );
     }
 
+    const rawProducts =
+      (data.products ||
+        data ||
+        []) as any[];
+
+    /*
+     * Normalize every product.
+     *
+     * This makes sure every product
+     * has:
+     *
+     * image
+     * images[]
+     */
+
     const products =
-      (data.products || data) as ProductItem[];
+      rawProducts.map(
+        (product) =>
+          productsApi.normalizeProduct(
+            product
+          )
+      );
 
     cache.products.set(
       metal,
@@ -546,23 +901,31 @@ export const productsApi = {
     return products;
   },
 
+  // ==========================================================
+  // GET PRODUCT BY ID
+  // ==========================================================
+
   async getById(
     id: string
   ): Promise<ProductItem> {
-    const token = getToken();
+    const token =
+      getToken();
 
-    const res = await fetch(
-      `${API_URL}/products/${id}`,
-      {
-        headers: token
-          ? {
-              Authorization: `Bearer ${token}`,
-            }
-          : {},
-      }
-    );
+    const res =
+      await fetch(
+        `${API_URL}/products/${id}`,
+        {
+          headers: token
+            ? {
+                Authorization:
+                  `Bearer ${token}`,
+              }
+            : {},
+        }
+      );
 
-    const data = await res.json();
+    const data =
+      await res.json();
 
     if (!res.ok) {
       throw new Error(
@@ -572,40 +935,22 @@ export const productsApi = {
     }
 
     const raw =
-      data.product || data;
+      data.product ||
+      data;
 
-    return {
-      ...raw,
+    /*
+     * Normalize the product.
+     *
+     * This gives the Product Details
+     * page:
+     *
+     * image  -> primary image
+     * images -> gallery
+     */
 
-      weight:
-        raw.weight ??
-        raw.grossWeight ??
-        0,
-
-      description:
-        raw.description ??
-        raw.desc ??
-        raw.details ??
-        "",
-
-      va:
-        raw.va ??
-        raw.making ??
-        0,
-
-      making:
-        raw.making ??
-        raw.va ??
-        0,
-
-      metalValue:
-        raw.metalValue ??
-        0,
-
-      gst:
-        raw.gst ??
-        0,
-    } as ProductItem;
+    return productsApi.normalizeProduct(
+      raw
+    );
   },
 };
 
@@ -614,27 +959,39 @@ export const productsApi = {
 // ============================================================
 
 export const categoriesApi = {
+  // ----------------------------------------------------------
+  // GET BY METAL
+  // ----------------------------------------------------------
+
   async getByMetal(
     metal: "Gold" | "Silver"
   ): Promise<Category[]> {
-    if (cache.categories.has(metal)) {
-      return cache.categories.get(metal)!;
+    if (
+      cache.categories.has(metal)
+    ) {
+      return cache.categories.get(
+        metal
+      )!;
     }
 
-    const token = getToken();
+    const token =
+      getToken();
 
-    const res = await fetch(
-      `${API_URL}/categories?metal=${metal}`,
-      {
-        headers: token
-          ? {
-              Authorization: `Bearer ${token}`,
-            }
-          : {},
-      }
-    );
+    const res =
+      await fetch(
+        `${API_URL}/categories?metal=${metal}`,
+        {
+          headers: token
+            ? {
+                Authorization:
+                  `Bearer ${token}`,
+              }
+            : {},
+        }
+      );
 
-    const data = await res.json();
+    const data =
+      await res.json();
 
     if (!res.ok) {
       throw new Error(
@@ -645,7 +1002,8 @@ export const categoriesApi = {
 
     const categories =
       (data.categories ||
-        data) as Category[];
+        data ||
+        []) as Category[];
 
     cache.categories.set(
       metal,
@@ -661,7 +1019,13 @@ export const categoriesApi = {
 // ============================================================
 
 export const discountsApi = {
-  async getAvailable(): Promise<Discount[]> {
+  // ----------------------------------------------------------
+  // AVAILABLE DISCOUNTS
+  // ----------------------------------------------------------
+
+  async getAvailable(): Promise<
+    Discount[]
+  > {
     const res =
       await request<Discount[]>(
         "/discounts/available",
@@ -670,14 +1034,22 @@ export const discountsApi = {
         }
       );
 
-    return res.discounts ?? [];
+    return (
+      res.discounts ?? []
+    );
   },
+
+  // ----------------------------------------------------------
+  // VALIDATE COUPON
+  // ----------------------------------------------------------
 
   async validateCoupon(
     code: string
   ): Promise<Discount> {
     const normalizedCode =
-      code.trim().toUpperCase();
+      code
+        .trim()
+        .toUpperCase();
 
     if (!normalizedCode) {
       throw new Error(
@@ -751,8 +1123,18 @@ export interface OrderDetail
   srCourierName?: string | null;
 }
 
+// ============================================================
+// ORDERS API
+// ============================================================
+
 export const ordersApi = {
-  async getAll(): Promise<OrderSummary[]> {
+  // ----------------------------------------------------------
+  // GET ALL ORDERS
+  // ----------------------------------------------------------
+
+  async getAll(): Promise<
+    OrderSummary[]
+  > {
     const res =
       await request<OrderSummary[]>(
         "/orders",
@@ -762,9 +1144,14 @@ export const ordersApi = {
       );
 
     return (
-      (res as any).orders ?? []
+      (res as any).orders ??
+      []
     );
   },
+
+  // ----------------------------------------------------------
+  // GET ORDER BY ID
+  // ----------------------------------------------------------
 
   async getById(
     orderId: string
@@ -781,8 +1168,11 @@ export const ordersApi = {
       );
 
     return {
-      order: (res as any).order,
-      tracking: (res as any).tracking,
+      order:
+        (res as any).order,
+
+      tracking:
+        (res as any).tracking,
     };
   },
 };

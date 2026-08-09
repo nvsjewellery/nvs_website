@@ -38,6 +38,19 @@ export function ProductCard({
     useState(true);
 
   /* =======================================================
+     PRIMARY PRODUCT IMAGE
+     
+     Use the legacy primary image first.
+     If it is empty, fall back to the first
+     image from the new gallery.
+  ======================================================= */
+
+  const productImage =
+    p.image ||
+    p.images?.[0] ||
+    "";
+
+  /* =======================================================
      LOAD AVAILABLE SEASONAL DISCOUNT
   ======================================================= */
 
@@ -61,6 +74,7 @@ export function ProductCard({
          * We only display SEASONAL discounts
          * on product cards.
          */
+
         const discounts =
           await discountsApi.getAvailable();
 
@@ -72,19 +86,15 @@ export function ProductCard({
          * Find all seasonal discounts that
          * actually apply to this product.
          */
+
         const applicable =
           discounts.filter((item) => {
             /*
              * ------------------------------------------------
              * ONLY SEASONAL DISCOUNTS
              * ------------------------------------------------
-             *
-             * CUSTOMER discounts are handled later
-             * at cart level.
-             *
-             * COUPON discounts require the customer
-             * to manually enter a coupon code.
              */
+
             if (
               item.type !== "SEASONAL"
             ) {
@@ -95,15 +105,8 @@ export function ProductCard({
              * ------------------------------------------------
              * METAL RESTRICTION
              * ------------------------------------------------
-             *
-             * If discount has a metal:
-             *
-             * Gold -> only Gold products
-             * Silver -> only Silver products
-             *
-             * If metal is null:
-             * applies to both.
              */
+
             if (
               item.metal &&
               item.metal !== p.metal
@@ -115,20 +118,8 @@ export function ProductCard({
              * ------------------------------------------------
              * PRODUCT-SPECIFIC DISCOUNT
              * ------------------------------------------------
-             *
-             * Example:
-             *
-             * Discount:
-             *   target = PRODUCT
-             *
-             * Backend:
-             *
-             * products: [
-             *   { id: "abc123" }
-             * ]
-             *
-             * Only product abc123 gets it.
              */
+
             if (
               item.target === "PRODUCT"
             ) {
@@ -145,15 +136,8 @@ export function ProductCard({
              * ------------------------------------------------
              * CATEGORY-WIDE DISCOUNT
              * ------------------------------------------------
-             *
-             * Example:
-             *
-             * target   = CATEGORY
-             * category = Earrings
-             *
-             * Every Earrings product receives
-             * the discount.
              */
+
             if (
               item.target === "CATEGORY"
             ) {
@@ -178,6 +162,7 @@ export function ProductCard({
                * No category information means
                * this discount cannot be matched.
                */
+
               if (
                 !productCategory ||
                 !discountCategory
@@ -192,9 +177,13 @@ export function ProductCard({
             }
 
             /*
-             * CART discounts are not displayed
-             * on individual product cards.
+             * ------------------------------------------------
+             * CART DISCOUNTS
+             * ------------------------------------------------
+             *
+             * Not displayed on product cards.
              */
+
             if (
               item.target === "CART"
             ) {
@@ -202,9 +191,13 @@ export function ProductCard({
             }
 
             /*
-             * CUSTOMER discounts are not displayed
-             * on product cards.
+             * ------------------------------------------------
+             * CUSTOMER DISCOUNTS
+             * ------------------------------------------------
+             *
+             * Not displayed on product cards.
              */
+
             if (
               item.target === "CUSTOMER"
             ) {
@@ -215,8 +208,11 @@ export function ProductCard({
           });
 
         /*
-         * No applicable seasonal discount.
+         * ------------------------------------------------
+         * NO APPLICABLE DISCOUNT
+         * ------------------------------------------------
          */
+
         if (
           applicable.length === 0
         ) {
@@ -232,17 +228,16 @@ export function ProductCard({
          * SELECT STRONGEST DISCOUNT
          * ------------------------------------------------
          *
-         * For now:
+         * Same kind:
+         * choose the larger value.
          *
-         * percent -> compare percentage
-         * flat    -> compare flat amount
+         * Different kinds:
+         * keep the later one for display.
          *
-         * The actual VA calculation will happen
-         * later in the cart/order pricing flow.
-         *
-         * This selection is only for the display
-         * badge.
+         * Actual monetary calculation is
+         * handled by the backend pricing flow.
          */
+
         const best =
           applicable.reduce(
             (
@@ -255,11 +250,12 @@ export function ProductCard({
 
               /*
                * Same discount kind:
-               * choose the larger value.
+               * choose larger value.
                */
+
               if (
                 current.kind ===
-                  next.kind
+                next.kind
               ) {
                 return next.value >
                   current.value
@@ -268,14 +264,12 @@ export function ProductCard({
               }
 
               /*
-               * If one is percentage and
-               * one is flat, keep the newer
-               * one for display.
+               * Different discount kinds.
                *
-               * Actual discount priority/
-               * calculation is handled by
-               * the backend pricing service.
+               * Keep the newer/next discount
+               * for display.
                */
+
               return next;
             },
             null as Discount | null
@@ -289,6 +283,7 @@ export function ProductCard({
          * Discount loading must NEVER
          * break the product card.
          */
+
         console.error(
           "Failed to load product discount:",
           error
@@ -346,9 +341,9 @@ export function ProductCard({
       ================================================= */}
 
       <div className="relative aspect-square bg-[color:var(--panel)] rounded-2xl overflow-hidden border border-[color:var(--border)]">
-        {p.image ? (
+        {productImage ? (
           <img
-            src={p.image}
+            src={productImage}
             alt={p.name}
             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
           />
@@ -492,6 +487,19 @@ export function SimpleProductCard({
 }: {
   p: Product;
 }) {
+  /* =======================================================
+     PRIMARY PRODUCT IMAGE
+     
+     Use the legacy primary image first.
+     If it is empty, fall back to the first
+     image from the gallery.
+  ======================================================= */
+
+  const productImage =
+    p.image ||
+    p.images?.[0] ||
+    "";
+
   return (
     <Link
       to="/product/$id"
@@ -505,9 +513,9 @@ export function SimpleProductCard({
       ================================================= */}
 
       <div className="relative aspect-square bg-[color:var(--panel)] rounded-2xl overflow-hidden border border-[color:var(--border)]">
-        {p.image ? (
+        {productImage ? (
           <img
-            src={p.image}
+            src={productImage}
             alt={p.name}
             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
           />

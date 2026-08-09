@@ -98,6 +98,15 @@ function ProductPage() {
     wishlist.includes(p?.id);
 
   /* =======================================================
+     RESET IMAGE SELECTION WHEN PRODUCT CHANGES
+  ======================================================= */
+
+  useEffect(() => {
+    setSelectedImg(null);
+    setQty(1);
+  }, [p.id]);
+
+  /* =======================================================
      PRODUCT IMAGES
   ======================================================= */
 
@@ -105,6 +114,12 @@ function ProductPage() {
     useMemo<string[]>(() => {
       const images: string[] = [];
 
+      /*
+       * NEW PRODUCT GALLERY
+       *
+       * Product.images is the new
+       * gallery field from Prisma.
+       */
       if (
         Array.isArray(
           p?.images
@@ -116,32 +131,49 @@ function ProductPage() {
               "string" &&
             image.trim()
           ) {
-            images.push(image);
+            images.push(
+              image.trim()
+            );
           }
         }
       }
 
+      /*
+       * BACKWARD COMPATIBILITY
+       *
+       * Older products may still
+       * have only the primary image.
+       */
       if (
         images.length === 0 &&
         typeof p?.image ===
-          "string"
+          "string" &&
+        p.image.trim()
       ) {
-        if (p.image.trim()) {
-          images.push(
-            p.image
-          );
-        }
+        images.push(
+          p.image.trim()
+        );
       }
 
+      /*
+       * Remove duplicate URLs.
+       */
       return Array.from(
         new Set(images)
       );
     }, [p]);
 
+  /*
+   * Make sure selectedImg belongs
+   * to the current product.
+   */
   const currentImage =
-    selectedImg ||
-    productImages[0] ||
-    "";
+    selectedImg &&
+    productImages.includes(
+      selectedImg
+    )
+      ? selectedImg
+      : productImages[0] || "";
 
   /* =======================================================
      BASIC PRODUCT DATA
@@ -155,14 +187,9 @@ function ProductPage() {
     );
 
   /*
-   * IMPORTANT:
-   *
-   * We are still trusting the backend
-   * product price here.
-   *
-   * The actual discount calculation
-   * will be handled later in cart/order
-   * pricing.
+   * Product price is calculated
+   * by the backend and returned
+   * as `price`.
    */
   const total =
     Number(
@@ -176,7 +203,9 @@ function ProductPage() {
 
   const making =
     Number(
-      p?.making ?? 0
+      p?.making ??
+        p?.va ??
+        0
     );
 
   const gst =
@@ -268,7 +297,9 @@ function ProductPage() {
                 }
 
                 return item.products.some(
-                  (discountProduct) =>
+                  (
+                    discountProduct
+                  ) =>
                     discountProduct.id ===
                     p.id
                 );
@@ -313,8 +344,9 @@ function ProductPage() {
               }
 
               /*
-               * CART and CUSTOMER discounts
-               * are not displayed here.
+               * CART and CUSTOMER
+               * discounts are not
+               * displayed here.
                */
 
               return false;
@@ -334,15 +366,7 @@ function ProductPage() {
 
         /* -----------------------------------------------
            FIND STRONGEST DISCOUNT
-        -----------------------------------------------
-
-           For now, the product page only
-           needs to display the configured
-           discount value.
-
-           Actual monetary discount calculation
-           against VA will happen later.
-        */
+        ----------------------------------------------- */
 
         const best =
           applicable.reduce(
@@ -367,8 +391,8 @@ function ProductPage() {
         setDiscount(best);
       } catch (error) {
         /*
-         * Discount display should NEVER
-         * break the product page.
+         * Discount loading should
+         * never break the product page.
          */
 
         console.error(
@@ -412,11 +436,13 @@ function ProductPage() {
 
   return (
     <Layout>
+
       {/* =================================================
           BREADCRUMB
       ================================================= */}
 
       <div className="max-w-7xl mx-auto px-4 py-6 text-sm text-[color:var(--muted-foreground)]">
+
         <Link
           to="/"
           className="cursor-pointer hover:text-[color:var(--gold-dark)] transition-colors"
@@ -444,6 +470,7 @@ function ProductPage() {
         <span className="text-[color:var(--espresso)]">
           {p.name}
         </span>
+
       </div>
 
       {/* =================================================
@@ -451,14 +478,17 @@ function ProductPage() {
       ================================================= */}
 
       <section className="max-w-7xl mx-auto px-4 grid grid-cols-1 lg:grid-cols-2 gap-10">
+
         {/* =================================================
             PRODUCT IMAGES
         ================================================= */}
 
         <div>
-          {/* Main Image */}
+
+          {/* MAIN IMAGE */}
 
           <div className="aspect-square bg-[color:var(--panel)] rounded-2xl overflow-hidden border border-[color:var(--border)]">
+
             {currentImage ? (
               <img
                 src={currentImage}
@@ -473,13 +503,15 @@ function ProductPage() {
                 No image available
               </div>
             )}
+
           </div>
 
-          {/* Thumbnail Images */}
+          {/* THUMBNAILS */}
 
           {productImages.length >
             1 && (
             <div className="grid grid-cols-4 gap-3 mt-3">
+
               {productImages.map(
                 (
                   imgUrl,
@@ -503,6 +535,7 @@ function ProductPage() {
                       i + 1
                     }`}
                   >
+
                     <img
                       src={imgUrl}
                       alt={`${p.name || "Product"} image ${
@@ -510,11 +543,14 @@ function ProductPage() {
                       }`}
                       className="w-full h-full object-cover"
                     />
+
                   </button>
                 )
               )}
+
             </div>
           )}
+
         </div>
 
         {/* =================================================
@@ -522,7 +558,8 @@ function ProductPage() {
         ================================================= */}
 
         <div>
-          {/* Metal + Category */}
+
+          {/* METAL + CATEGORY */}
 
           <p className="label-caps text-[color:var(--gold-dark)] text-xs">
             {p.metal} ·{" "}
@@ -530,7 +567,7 @@ function ProductPage() {
               p.category}
           </p>
 
-          {/* Product Name */}
+          {/* PRODUCT NAME */}
 
           <h1 className="font-serif text-4xl md:text-5xl mt-2 text-[color:var(--espresso)]">
             {p.name}
@@ -542,10 +579,13 @@ function ProductPage() {
 
           {discountLabel && (
             <div className="mt-4">
+
               <div className="inline-flex items-center gap-1.5 rounded-full bg-[color:var(--gold)] text-white px-3 py-1.5 text-xs font-semibold shadow-sm">
+
                 <Tag className="w-3.5 h-3.5" />
 
                 {discountLabel}
+
               </div>
 
               <p className="text-xs text-green-700 font-medium mt-2">
@@ -554,6 +594,7 @@ function ProductPage() {
                   ? `${discount.value}% off making charges`
                   : `₹${discount?.value} off making charges`}
               </p>
+
             </div>
           )}
 
@@ -562,6 +603,7 @@ function ProductPage() {
           ================================================= */}
 
           <div className="flex items-center gap-3 mt-4">
+
             <span className="pill-gold-outline !py-1 !px-3 text-xs">
               {p.purity}
             </span>
@@ -569,6 +611,7 @@ function ProductPage() {
             <span className="text-sm text-[color:var(--muted-foreground)]">
               {weightVal} g
             </span>
+
           </div>
 
           {/* =================================================
@@ -576,6 +619,7 @@ function ProductPage() {
           ================================================= */}
 
           <div className="mt-6">
+
             <div className="text-4xl font-serif text-[color:var(--gold-dark)] font-bold">
               {formatINR(
                 total
@@ -587,6 +631,7 @@ function ProductPage() {
               Includes making
               charges
             </p>
+
           </div>
 
           {/* =================================================
@@ -600,6 +645,7 @@ function ProductPage() {
             }}
             className="rounded-2xl p-5 mt-6"
           >
+
             <p className="label-caps text-[color:var(--gold-dark)] text-[10px] mb-3">
               Live Price Breakdown
             </p>
@@ -628,6 +674,7 @@ function ProductPage() {
               v={total}
               bold
             />
+
           </div>
 
           {/* =================================================
@@ -635,9 +682,11 @@ function ProductPage() {
           ================================================= */}
 
           <div className="flex items-center gap-3 mt-6 flex-wrap">
-            {/* Quantity */}
+
+            {/* QUANTITY */}
 
             <div className="flex items-center border border-[color:var(--border)] rounded-full">
+
               <button
                 type="button"
                 onClick={() =>
@@ -678,9 +727,10 @@ function ProductPage() {
               >
                 <Plus className="w-4 h-4" />
               </button>
+
             </div>
 
-            {/* Add To Cart */}
+            {/* ADD TO CART */}
 
             <button
               type="button"
@@ -695,7 +745,7 @@ function ProductPage() {
               Add to Cart
             </button>
 
-            {/* Buy Now */}
+            {/* BUY NOW */}
 
             <Link
               to="/checkout"
@@ -710,7 +760,7 @@ function ProductPage() {
               Buy Now
             </Link>
 
-            {/* Wishlist */}
+            {/* WISHLIST */}
 
             <button
               type="button"
@@ -726,6 +776,7 @@ function ProductPage() {
                   : "Add to wishlist"
               }
             >
+
               <Heart
                 className={`w-4 h-4 ${
                   saved
@@ -733,7 +784,9 @@ function ProductPage() {
                     : "text-[color:var(--gold-dark)]"
                 }`}
               />
+
             </button>
+
           </div>
 
           {/* =================================================
@@ -741,19 +794,26 @@ function ProductPage() {
           ================================================= */}
 
           <div className="mt-8 pt-6 border-t border-[color:var(--border)]">
+
             <p className="text-sm text-[color:var(--muted-foreground)] leading-relaxed whitespace-pre-line">
+
               {rawDesc.length >
               0
                 ? rawDesc
                 : `${p.name} — crafted in ${
                     p.purity
                   } ${p.metal?.toLowerCase()} weighing ${weightVal}g. Traditional hand-finishing with heritage techniques.`}
+
             </p>
+
           </div>
+
         </div>
+
       </section>
 
       <OrnamentalDivider className="mt-16" />
+
     </Layout>
   );
 }
@@ -779,6 +839,7 @@ function BreakdownRow({
           : "text-[color:var(--muted-foreground)]"
       }`}
     >
+
       <span>
         {l}
       </span>
@@ -786,6 +847,7 @@ function BreakdownRow({
       <span>
         {formatINR(v)}
       </span>
+
     </div>
   );
 }
