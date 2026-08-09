@@ -182,19 +182,19 @@ export function Checkout() {
   );
 
   /* =======================================================
-     COUPON
+     APPLIED COUPON
   ======================================================= */
 
-  const [coupon, setCoupon] = useState("");
-
+  /*
+   * Coupon entry happens in the cart.
+   * Checkout only displays the coupon returned by the backend.
+   */
   const [appliedCoupon, setAppliedCoupon] =
     useState<string | null>(null);
 
   /*
-   * This is the TOTAL discount returned by
-   * the backend after payment initiation.
-   *
-   * It is NOT necessarily coupon-only discount.
+   * Total discount returned by the backend.
+   * This may include customer, seasonal and coupon discounts.
    */
   const [backendDiscount, setBackendDiscount] =
     useState(0);
@@ -204,9 +204,6 @@ export function Checkout() {
 
   const [backendTotal, setBackendTotal] =
     useState<number | null>(null);
-
-  const [couponError, setCouponError] =
-    useState("");
 
   /* =======================================================
      CUSTOMER DISCOUNT
@@ -734,6 +731,25 @@ export function Checkout() {
   );
 
   /* =======================================================
+     PRICE COMPONENTS
+  ======================================================= */
+
+  /*
+   * Customer discounts apply only to VA / making charges.
+   */
+  const displayVaTotal = cartVaTotal;
+
+  /*
+   * Display-only metal value. The backend remains the source
+   * of truth for the final payable amount.
+   */
+  const displayMetalTotal = Math.max(
+    calculatedSubtotal -
+      displayVaTotal,
+    0
+  );
+
+  /* =======================================================
      CUSTOMER DISCOUNT AMOUNT
   ======================================================= */
 
@@ -785,19 +801,6 @@ export function Checkout() {
   const displayTotal =
     backendTotal ??
     estimatedCustomerTotal;
-
-  /* =======================================================
-     CLEAR COUPON
-  ======================================================= */
-
-  function clearCoupon() {
-    setCoupon("");
-    setAppliedCoupon(null);
-    setBackendDiscount(0);
-    setBackendSubtotal(null);
-    setBackendTotal(null);
-    setCouponError("");
-  }
 
   /* =======================================================
      PLACE ORDER
@@ -865,7 +868,6 @@ export function Checkout() {
     }
 
     setLoading(true);
-    setCouponError("");
 
     try {
       /* =====================================================
@@ -888,39 +890,19 @@ export function Checkout() {
       }
 
       /* =====================================================
-         NORMALIZE COUPON
-      ===================================================== */
-
-      const couponCode =
-        coupon.trim()
-          ? coupon
-              .trim()
-              .toUpperCase()
-          : undefined;
-
-      /*
-       * Remember coupon submitted by customer.
-       */
-
-      if (couponCode) {
-        setAppliedCoupon(
-          couponCode
-        );
-      }
-
-      /* =====================================================
          STEP 1
          INITIATE PAYMENT
       ===================================================== */
 
+      /*
+       * Coupon entry is handled in the cart.
+       * Checkout sends no new coupon input.
+       * The backend remains the source of truth for final pricing.
+       */
       const paymentResponse =
         (await api.post(
           "/orders/initiate-payment",
-          couponCode
-            ? {
-                couponCode,
-              }
-            : {}
+          {}
         )) as InitiatePaymentResponse;
 
       if (
@@ -983,14 +965,10 @@ export function Checkout() {
         );
       }
 
-      if (
-        paymentResponse.coupon
-      ) {
+      if (paymentResponse.coupon?.code) {
         setAppliedCoupon(
           paymentResponse.coupon.code
         );
-      } else if (!couponCode) {
-        setAppliedCoupon(null);
       }
 
       /* =====================================================
@@ -1038,16 +1016,8 @@ export function Checkout() {
         name:
           "NVS Jewellery",
 
-        /*
-         * Use couponCode directly instead of
-         * appliedCoupon state because React state
-         * updates asynchronously.
-         */
-
         description:
-          couponCode
-            ? `Jewellery Purchase - ${couponCode}`
-            : "Jewellery Purchase Checkout",
+          "Jewellery Purchase Checkout",
 
         image:
           "/favicon.ico",
@@ -1084,16 +1054,6 @@ export function Checkout() {
                 phone:
                   phone.trim(),
               };
-
-              /*
-               * Send exactly the same coupon used
-               * during payment initiation.
-               */
-
-              if (couponCode) {
-                verifyPayload.couponCode =
-                  couponCode;
-              }
 
               /* =============================================
                  STEP 2
@@ -1197,17 +1157,6 @@ export function Checkout() {
         "Checkout/payment initiation failed:",
         error
       );
-
-      if (
-        error instanceof Error &&
-        error.message
-          .toLowerCase()
-          .includes("coupon")
-      ) {
-        setCouponError(
-          error.message
-        );
-      }
 
       alert(
         error instanceof Error
@@ -1849,25 +1798,40 @@ export function Checkout() {
                   SUBTOTAL
               ========================================= */}
 
-              <div className="space-y-1">
+                <div className="space-y-1">
 
-                <div className="flex justify-between text-sm">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-[color:var(--muted-foreground)]">
+                      Cost of Metal
+                    </span>
+                    <span className="text-[color:var(--espresso)]">
+                      {formatINR(
+                        displayMetalTotal
+                      )}
+                    </span>
+                  </div>
 
-                  <span className="text-[color:var(--muted-foreground)]">
-                    Subtotal
-                  </span>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-[color:var(--muted-foreground)]">
+                      VA / Making Charges
+                    </span>
+                    <span className="text-[color:var(--espresso)]">
+                      {formatINR(
+                        displayVaTotal
+                      )}
+                    </span>
+                  </div>
 
-                  <span className="text-[color:var(--espresso)]">
-                    {formatINR(
-                      displaySubtotal
-                    )}
-                  </span>
-
-                </div>
-
-                {/* =======================================
-                    CUSTOMER DISCOUNT
-                ======================================= */}
+                  <div className="flex justify-between text-sm pt-1">
+                    <span className="text-[color:var(--muted-foreground)]">
+                      Subtotal
+                    </span>
+                    <span className="text-[color:var(--espresso)]">
+                      {formatINR(
+                        displaySubtotal
+                      )}
+                    </span>
+                  </div>
 
                 {customerDiscount &&
                   customerDiscountAmount >
@@ -1928,23 +1892,32 @@ export function Checkout() {
                   )}
 
                 {/* =======================================
-                    COUPON / BACKEND DISCOUNT
+                    COUPON DISCOUNT
                 ======================================= */}
 
-                {backendDiscount > 0 &&
+                {appliedCoupon &&
+                  backendDiscount >
+                    customerDiscountAmount &&
                   backendTotal !== null && (
                     <div className="flex justify-between text-sm mt-2">
-
-                      <span className="text-green-700">
-                        Total discount
-                      </span>
+                      <div>
+                        <span className="text-green-700">
+                          Coupon Discount
+                        </span>
+                        <p className="text-[10px] text-[color:var(--muted-foreground)] mt-0.5">
+                          {appliedCoupon}
+                        </p>
+                      </div>
 
                       <span className="text-green-700 font-medium">
                         -{formatINR(
-                          backendDiscount
+                          Math.max(
+                            backendDiscount -
+                              customerDiscountAmount,
+                            0
+                          )
                         )}
                       </span>
-
                     </div>
                   )}
 
@@ -1980,96 +1953,26 @@ export function Checkout() {
               )}
 
               {/* =========================================
-                  COUPON
+                  APPLIED COUPON
               ========================================= */}
 
-              <div className="mt-5">
-
-                <label className="text-xs label-caps text-[color:var(--gold-dark)] font-semibold">
-                  Coupon Code
-                </label>
-
-                <div className="flex gap-2 mt-1">
-
-                  <input
-                    type="text"
-                    value={coupon}
-                    disabled={loading}
-                    onChange={(event) => {
-                      setCoupon(
-                        event.target.value.toUpperCase()
-                      );
-
-                      /*
-                       * Coupon changed.
-                       *
-                       * Previously calculated backend
-                       * pricing is no longer valid.
-                       */
-
-                      setAppliedCoupon(
-                        null
-                      );
-
-                      setBackendDiscount(
-                        0
-                      );
-
-                      setBackendSubtotal(
-                        null
-                      );
-
-                      setBackendTotal(
-                        null
-                      );
-
-                      setCouponError("");
-                    }}
-                    placeholder="Enter coupon"
-                    className="flex-1 min-w-0 border border-[color:var(--border)] rounded-lg px-3 py-2 text-sm bg-white outline-none focus:border-[color:var(--gold)]"
-                  />
-
-                  {coupon && (
-                    <button
-                      type="button"
-                      disabled={loading}
-                      onClick={
-                        clearCoupon
-                      }
-                      className="px-3 py-2 text-xs rounded-lg border border-[color:var(--border)] text-[color:var(--muted-foreground)] hover:border-[color:var(--gold)] cursor-pointer disabled:opacity-50"
-                    >
-                      Clear
-                    </button>
-                  )}
-
+              {appliedCoupon && (
+                <div className="mt-5 rounded-xl border border-[color:var(--gold)]/30 bg-white/60 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold text-[color:var(--gold-dark)]">
+                        Coupon Applied
+                      </p>
+                      <p className="text-xs text-[color:var(--muted-foreground)] mt-0.5">
+                        {appliedCoupon}
+                      </p>
+                    </div>
+                    <span className="text-xs font-semibold text-green-700">
+                      Applied from cart
+                    </span>
+                  </div>
                 </div>
-
-                {appliedCoupon &&
-                  couponError === "" && (
-                    <p className="text-xs text-green-700 font-medium mt-2">
-                      Coupon{" "}
-                      <strong>
-                        {
-                          appliedCoupon
-                        }
-                      </strong>{" "}
-                      applied successfully.
-                    </p>
-                  )}
-
-                {couponError && (
-                  <p className="text-xs text-red-600 font-medium mt-2">
-                    {couponError}
-                  </p>
-                )}
-
-                <p className="text-[10px] text-[color:var(--muted-foreground)] mt-2">
-                  Discount eligibility is
-                  verified securely at
-                  payment.
-                </p>
-
-              </div>
+              )}
 
               {/* =========================================
                   PAYMENT BUTTON
