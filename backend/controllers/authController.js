@@ -204,7 +204,9 @@ const forgotPassword = asyncHandler(async (req, res) => {
     },
   });
 
-  const clientUrl = process.env.CLIENT_URL || "https://nvsjewellery.com";
+  // Uses CLIENT_URL or FRONTEND_URL env variables, defaulting to live production domain
+  const clientUrl =
+    process.env.CLIENT_URL || process.env.FRONTEND_URL || "https://nvsjewellery.com";
   const resetUrl = `${clientUrl}/signin?resetToken=${resetToken}`;
 
   const htmlTemplate = `
