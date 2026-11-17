@@ -1,155 +1,175 @@
+
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, RefreshCw, TrendingUp, Sparkles } from "lucide-react";
-import { useEffect, useState, useMemo } from "react";
+import {
+  ArrowRight,
+  ArrowLeft,
+  RefreshCw,
+  TrendingUp,
+  X,
+  Images,
+} from "lucide-react";
+import { useEffect, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { OrnamentalDivider } from "@/components/OrnamentalDivider";
-import { ProductCard } from "@/components/ProductCard";
-import { metalSlug } from "@/lib/products";
-import { productsApi } from "@/lib/api";
-import { type Product } from "@/lib/store";
-import InstagramReelsSection from "@/components/InstagramReelsSection";
 
-// Static asset imports
-import catNecklaces from "@/assets/cat-necklaces.jpg";
-import catBangles from "@/assets/cat-bangles.jpg";
-import catRings from "@/assets/cat-rings.jpg";
-import catEarrings from "@/assets/cat-earrings.jpg";
-import catMangalsutra from "@/assets/cat-mangalsutra.jpg";
-import catChains from "@/assets/cat-chains.jpg";
+// ======================================================
+// ROUTE
+// ======================================================
 
-export const Route = createFileRoute("/")({ component: Home });
+export const Route = createFileRoute("/")({
+  component: Home,
+});
+
+// ======================================================
+// ORIGINAL HERO BANNER - RESTORED
+// ======================================================
 
 const HERO_SLIDES = [
   {
     title: "Everyday Gold,",
     highlight: "Timeless Sparkle",
-    subtitle: "Certified craftsmanship since 1978. Discover heirloom pieces crafted for modern elegance.",
-    image: "https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?q=80&w=1920&auto=format&fit=crop",
+    subtitle:
+      "Certified craftsmanship since 1978. Discover heirloom pieces crafted for modern elegance.",
+    image:
+      "https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?q=80&w=1920&auto=format&fit=crop",
     linkText: "Shop Gold Collection",
     linkUrl: "/gold",
   },
   {
     title: "Graceful Heritage,",
     highlight: "Royal Bridal Edits",
-    subtitle: "Intricately detailed temple and bridal jewellery designed to make your special moments eternal.",
-    image: "https://images.unsplash.com/photo-1605100804763-247f67b3557e?q=80&w=1920&auto=format&fit=crop",
+    subtitle:
+      "Intricately detailed temple and bridal jewellery designed to make your special moments eternal.",
+    image:
+      "https://images.unsplash.com/photo-1605100804763-247f67b3557e?q=80&w=1920&auto=format&fit=crop",
     linkText: "Explore Bridal Line",
     linkUrl: "/gold",
   },
   {
     title: "Pure & Radiant,",
     highlight: "Silver Craftsmanship",
-    subtitle: "Hallmarked sterling silver and fine bullion articles styled for contemporary everyday luxury.",
-    image: "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?q=80&w=1920&auto=format&fit=crop",
+    subtitle:
+      "Hallmarked sterling silver and fine bullion articles styled for contemporary everyday luxury.",
+    image:
+      "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?q=80&w=1920&auto=format&fit=crop",
     linkText: "Discover Silver",
     linkUrl: "/silver",
   },
 ];
 
-const METALS = [
-  { name: "Gold", grad: "linear-gradient(135deg,#f6d47a,#b8912f)" },
-  { name: "Silver", grad: "linear-gradient(135deg,#e8e8ea,#a8a8ac)" },
-];
+// ======================================================
+// STATIC SILVER PHOTOS
+// photo1.jpg to photo65.jpg
+// Files must be in /public
+// ======================================================
 
-const FEATURED = [
-  { name: "Necklaces", tag: "Handcrafted heirlooms", img: `${catNecklaces}?v=2` },
-  { name: "Bangles", tag: "Stacked in tradition", img: `${catBangles}?v=2` },
-  { name: "Rings", tag: "Sparkling promises", img: `${catRings}?v=2` },
-  { name: "Earrings", tag: "Jhumkas & drops", img: `${catEarrings}?v=2` },
-  { name: "Mangalsutra", tag: "Sacred bonds", img: `${catMangalsutra}?v=2` },
-  { name: "Chains", tag: "Everyday classics", img: `${catChains}?v=2` },
-];
+const SILVER_PHOTOS = Array.from(
+  { length: 65 },
+  (_, index) => ({
+    id: index + 1,
+    image: `/photo${index + 1}.jpg`,
+    name: `Silver Design ${index + 1}`,
+  })
+);
 
-// Robust helper to extract category from API product objects
-// Robust helper to extract category from API product objects
-function getProductCategory(p: Product): string {
-  if (!p) return "";
-  const raw = p as unknown as Record<string, unknown>;
-  const val = (
-    p.sub || 
-    raw.subCategory || 
-    raw.category || 
-    ""
-  ) as string;
-
-  return val.trim();
-}
+// ======================================================
+// HOME
+// ======================================================
 
 function Home() {
-  const [goldProducts, setGoldProducts] = useState<Product[]>([]);
-  const [silverProducts, setSilverProducts] = useState<Product[]>([]);
-  const [loadingGold, setLoadingGold] = useState(true);
-  const [loadingSilver, setLoadingSilver] = useState(true);
   const [currentSlide, setCurrentSlide] = useState(0);
 
-  // Auto-advance hero carousel
+  const [selectedImage, setSelectedImage] = useState<
+    number | null
+  >(null);
+
+  // Original automatic banner transition
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % HERO_SLIDES.length);
+      setCurrentSlide(
+        (prev) => (prev + 1) % HERO_SLIDES.length
+      );
     }, 4500);
+
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch Gold Products
+  const closePreview = () => setSelectedImage(null);
+
+  const nextImage = () => {
+    setSelectedImage((current) =>
+      current === null
+        ? null
+        : (current + 1) % SILVER_PHOTOS.length
+    );
+  };
+
+  const previousImage = () => {
+    setSelectedImage((current) =>
+      current === null
+        ? null
+        : (current - 1 + SILVER_PHOTOS.length) %
+          SILVER_PHOTOS.length
+    );
+  };
+
+  // Fullscreen image keyboard navigation
   useEffect(() => {
-    let cancelled = false;
-    productsApi
-      .getByMetal("Gold")
-      .then((data) => { if (!cancelled) setGoldProducts(data as Product[]); })
-      .catch(() => { if (!cancelled) setGoldProducts([]); })
-      .finally(() => { if (!cancelled) setLoadingGold(false); });
-    return () => { cancelled = true; };
-  }, []);
+    if (selectedImage === null) return;
 
-  // Fetch Silver Products
-  useEffect(() => {
-    let cancelled = false;
-    productsApi
-      .getByMetal("Silver")
-      .then((data) => { if (!cancelled) setSilverProducts(data as Product[]); })
-      .catch(() => { if (!cancelled) setSilverProducts([]); })
-      .finally(() => { if (!cancelled) setLoadingSilver(false); });
-    return () => { cancelled = true; };
-  }, []);
-
-  // Dynamic category lists with formatting and deduplication
-  const goldCategories = useMemo(() => {
-    const set = new Set<string>();
-    goldProducts.forEach((p) => {
-      const cat = getProductCategory(p);
-      if (cat) {
-        const formatted = cat.charAt(0).toUpperCase() + cat.slice(1).toLowerCase();
-        set.add(formatted);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closePreview();
       }
-    });
-    return Array.from(set);
-  }, [goldProducts]);
 
-  const silverCategories = useMemo(() => {
-    const set = new Set<string>();
-    silverProducts.forEach((p) => {
-      const cat = getProductCategory(p);
-      if (cat) {
-        const formatted = cat.charAt(0).toUpperCase() + cat.slice(1).toLowerCase();
-        set.add(formatted);
+      if (event.key === "ArrowRight") {
+        setSelectedImage((current) =>
+          current === null
+            ? null
+            : (current + 1) % SILVER_PHOTOS.length
+        );
       }
-    });
-    return Array.from(set);
-  }, [silverProducts]);
 
-  // Top trending slices
-  const goldTrending = goldProducts.slice(0, 4);
-  const silverTrending = silverProducts.slice(0, 4);
+      if (event.key === "ArrowLeft") {
+        setSelectedImage((current) =>
+          current === null
+            ? null
+            : (current - 1 + SILVER_PHOTOS.length) %
+              SILVER_PHOTOS.length
+        );
+      }
+    };
+
+    document.addEventListener(
+      "keydown",
+      handleKeyDown
+    );
+
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.removeEventListener(
+        "keydown",
+        handleKeyDown
+      );
+      document.body.style.overflow = "";
+    };
+  }, [selectedImage]);
 
   return (
     <Layout>
-      {/* Hero Carousel Banner */}
+      {/* ============================================
+          ORIGINAL HERO CAROUSEL - UNCHANGED
+      ============================================ */}
+
       <section className="relative h-[75vh] min-h-[480px] max-h-[680px] overflow-hidden bg-black">
         {HERO_SLIDES.map((slide, idx) => (
           <div
             key={slide.title}
             className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
-              idx === currentSlide ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"
+              idx === currentSlide
+                ? "opacity-100 z-10 pointer-events-auto"
+                : "opacity-0 z-0 pointer-events-none"
             }`}
           >
             <img
@@ -157,6 +177,7 @@ function Home() {
               alt={slide.title}
               className="absolute inset-0 w-full h-full object-cover object-center scale-105 transition-transform duration-[4500ms] ease-out"
             />
+
             <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent max-w-3xl" />
 
             <div className="relative z-10 max-w-7xl mx-auto px-6 h-full flex items-center">
@@ -164,18 +185,26 @@ function Home() {
                 <p className="label-caps text-[color:var(--gold)] text-xs tracking-widest font-semibold uppercase">
                   NVS Jewellery Presents
                 </p>
+
                 <h1 className="font-serif text-4xl sm:text-5xl md:text-6xl leading-[1.1] text-white">
-                  {slide.title}<br />
+                  {slide.title}
+                  <br />
                   <span className="text-[color:var(--gold)] italic font-serif">
                     {slide.highlight}
                   </span>
                 </h1>
+
                 <p className="text-white/85 text-sm md:text-base leading-relaxed max-w-md">
                   {slide.subtitle}
                 </p>
+
                 <div className="pt-2">
-                  <Link to={slide.linkUrl} className="pill-gold inline-flex items-center gap-2 shadow-md hover:shadow-lg transition">
-                    {slide.linkText} <ArrowRight className="w-4 h-4" />
+                  <Link
+                    to={slide.linkUrl}
+                    className="pill-gold inline-flex items-center gap-2 shadow-md hover:shadow-lg transition"
+                  >
+                    {slide.linkText}
+                    <ArrowRight className="w-4 h-4" />
                   </Link>
                 </div>
               </div>
@@ -183,277 +212,265 @@ function Home() {
           </div>
         ))}
 
+        {/* Original carousel indicators */}
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3 z-20">
           {HERO_SLIDES.map((_, i) => (
             <button
+              type="button"
               key={i}
               onClick={() => setCurrentSlide(i)}
               aria-label={`Go to slide ${i + 1}`}
               className={`h-2 rounded-full transition-all duration-300 ${
-                i === currentSlide ? "w-8 bg-[color:var(--gold)]" : "w-2 bg-white/40 hover:bg-white/80"
+                i === currentSlide
+                  ? "w-8 bg-[color:var(--gold)]"
+                  : "w-2 bg-white/40 hover:bg-white/80"
               }`}
             />
           ))}
         </div>
       </section>
 
-      <LiveRatesBar />
+      {/* ============================================
+          RATES BAR - NO BACKEND FETCH
+      ============================================ */}
+
+      <StaticRatesBar />
 
       <OrnamentalDivider />
 
-      {/* 1. Shop by Metal */}
-      <section className="max-w-7xl mx-auto px-4">
-        <div className="text-center mb-10">
-          <p className="label-caps text-[color:var(--gold-dark)] text-xs">Choose Your Metal</p>
-          <h2 className="font-serif text-3xl md:text-4xl mt-1 text-[color:var(--espresso)]">Shop by Metal</h2>
-        </div>
-        <div className="grid grid-cols-2 gap-6 max-w-lg mx-auto">
-          {METALS.map((m) => (
-            <Link key={m.name} to={`/${metalSlug(m.name)}` as string} className="bg-white border border-[color:var(--border)] rounded-2xl p-6 text-center hover:border-[color:var(--gold)] hover:shadow-md transition group">
-              <div className="w-20 h-20 mx-auto rounded-full shadow-inner" style={{ background: m.grad }} />
-              <h3 className="font-serif text-lg mt-4 text-[color:var(--espresso)]">{m.name}</h3>
-              <span className="label-caps text-[10px] text-[color:var(--gold-dark)] mt-2 inline-flex items-center gap-1 group-hover:gap-2 transition-all">Explore <ArrowRight className="w-3 h-3" /></span>
-            </Link>
-          ))}
+      {/* ============================================
+          SILVER COLLECTION INTRO
+      ============================================ */}
+
+      <section
+        id="silver-collection"
+        className="max-w-7xl mx-auto px-4 pt-8 scroll-mt-24"
+      >
+        <div className="text-center mb-12">
+          <p className="label-caps text-[color:var(--gold-dark)] text-xs uppercase tracking-widest font-semibold">
+            Our Exclusive Collection
+          </p>
+
+          <h2 className="font-serif text-3xl md:text-4xl mt-3 text-[color:var(--espresso)]">
+            Elegant Silver Jewellery
+          </h2>
+
+          <p className="text-[color:var(--muted-foreground)] text-sm mt-4 max-w-2xl mx-auto leading-relaxed">
+            Explore our beautiful silver jewellery
+            collection, carefully selected for
+            elegance, tradition and timeless style.
+          </p>
+
+          <div className="w-20 h-[2px] bg-[color:var(--gold)] mx-auto mt-7" />
         </div>
       </section>
 
-      <OrnamentalDivider />
+      {/* ============================================
+          ALL 65 SILVER PHOTOS
+      ============================================ */}
 
-      {/* 2. Featured Categories Grid */}
-      <section className="max-w-7xl mx-auto px-4">
-        <div style={{ backgroundColor: "var(--panel)" }} className="rounded-3xl p-6 md:p-10 border border-[color:var(--border)] shadow-sm">
-          <div className="text-center mb-10">
-            <p className="label-caps text-[color:var(--gold-dark)] text-xs">Signature Edits</p>
-            <h2 className="font-serif text-3xl md:text-4xl mt-1 text-[color:var(--espresso)]">Featured Categories</h2>
+      <section className="max-w-7xl mx-auto px-4 pb-20">
+        <div
+          style={{ backgroundColor: "var(--panel)" }}
+          className="rounded-3xl p-4 sm:p-6 md:p-10 border border-[color:var(--border)] shadow-sm"
+        >
+          {/* Header */}
+          <div className="flex flex-wrap justify-between items-center gap-4 mb-8">
+            <div>
+              <p className="label-caps text-[color:var(--gold-dark)] text-xs uppercase tracking-widest">
+                Browse Our Designs
+              </p>
+
+              <h2 className="font-serif text-2xl md:text-3xl mt-2 text-[color:var(--espresso)]">
+                Silver Collection
+              </h2>
+
+              <p className="text-xs text-[color:var(--muted-foreground)] mt-2">
+                Explore our complete silver jewellery
+                collection
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 bg-white border border-[color:var(--border)] rounded-full px-4 py-2 text-[color:var(--gold-dark)] text-xs font-semibold">
+              <Images className="w-4 h-4" />
+              {SILVER_PHOTOS.length} Designs
+            </div>
           </div>
-          
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-5 md:gap-6">
-            {FEATURED.map((f) => (
-              <Link 
-                key={f.name} 
-                to="/gold" 
-                search={{ cat: f.name }}
-                className="group relative rounded-2xl overflow-hidden aspect-[4/3] bg-neutral-900 border border-[color:var(--border)] shadow-sm hover:shadow-md transition-all duration-300"
+
+          {/* Photo Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5">
+            {SILVER_PHOTOS.map((photo, index) => (
+              <button
+                type="button"
+                key={photo.id}
+                onClick={() => setSelectedImage(index)}
+                className="group overflow-hidden rounded-2xl border border-[color:var(--border)] bg-white text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-[color:var(--gold)] hover:shadow-xl"
               >
-                <img 
-                  src={f.img} 
-                  alt={f.name} 
-                  loading="lazy" 
-                  className="absolute inset-0 w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500 ease-out" 
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent" />
-                <div className="absolute bottom-0 left-0 right-0 p-4 md:p-6 text-left flex flex-col justify-end">
-                  <h3 className="font-serif text-white text-xl md:text-2xl font-normal leading-snug">{f.name}</h3>
-                  <p className="text-white/75 text-xs mt-0.5 line-clamp-1">{f.tag}</p>
-                  <div className="mt-3">
-                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[color:var(--gold)] group-hover:translate-x-1 transition-transform uppercase tracking-wider">
-                      Shop Collection <ArrowRight className="w-3 h-3" />
-                    </span>
+                {/* Image */}
+                <div className="relative aspect-square overflow-hidden bg-[#f5f3f0]">
+                  <img
+                    src={photo.image}
+                    alt={photo.name}
+                    loading={
+                      index < 8 ? "eager" : "lazy"
+                    }
+                    decoding="async"
+                    className="w-full h-full object-contain p-2 transition-transform duration-500 group-hover:scale-105"
+                  />
+
+                  {/* Image Number */}
+                  <div className="absolute top-3 right-3 rounded-full bg-white/90 shadow-sm px-3 py-1 text-[11px] font-medium text-[color:var(--gold-dark)]">
+                    {String(photo.id).padStart(2, "0")}
                   </div>
                 </div>
-              </Link>
+
+                {/* Image Details */}
+                <div className="p-3 sm:p-5">
+                  <p className="text-[10px] font-semibold tracking-widest uppercase text-[color:var(--gold-dark)] mb-1">
+                    Silver Jewellery
+                  </p>
+
+                  <h3 className="font-serif text-sm sm:text-base text-[color:var(--espresso)] font-medium">
+                    {photo.name}
+                  </h3>
+
+                  <div className="mt-3 flex items-center gap-1 text-xs font-medium text-[color:var(--gold-dark)]">
+                    View Design
+
+                    <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
+                  </div>
+                </div>
+              </button>
             ))}
           </div>
+
+          {/* End Message */}
+          <div className="text-center mt-14">
+            <div className="w-40 h-px bg-[color:var(--border)] mx-auto mb-5" />
+
+            <p className="font-serif text-lg italic text-[color:var(--gold-dark)]">
+              Beauty in Every Detail
+            </p>
+
+            <p className="text-xs text-[color:var(--muted-foreground)] mt-2">
+              You have viewed all{" "}
+              {SILVER_PHOTOS.length} silver designs
+            </p>
+          </div>
         </div>
       </section>
 
-      <OrnamentalDivider />
+      {/* ============================================
+          FULLSCREEN IMAGE PREVIEW
+      ============================================ */}
 
-      {/* 3. Trending in Gold */}
-      <section className="max-w-7xl mx-auto px-4">
-        <div style={{ backgroundColor: "var(--panel)" }} className="rounded-3xl p-6 md:p-10 border border-[color:var(--border)] shadow-sm">
-          <div className="text-center mb-8">
-            <p className="label-caps text-[color:var(--gold-dark)] text-xs uppercase tracking-widest font-semibold">Curated Favourites</p>
-            <h2 className="font-serif text-3xl md:text-4xl mt-1 text-[color:var(--espresso)]">Trending in Gold</h2>
-            <p className="text-[color:var(--muted-foreground)] text-xs mt-1">Handpicked gold bestsellers this season</p>
+      {selectedImage !== null && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Silver jewellery image preview"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 p-3 sm:p-8"
+          onClick={closePreview}
+        >
+          {/* Close */}
+          <button
+            type="button"
+            onClick={closePreview}
+            aria-label="Close preview"
+            className="absolute top-4 right-4 z-20 bg-white/15 hover:bg-white/30 text-white p-3 rounded-full transition"
+          >
+            <X size={23} />
+          </button>
+
+          {/* Previous */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              previousImage();
+            }}
+            aria-label="Previous image"
+            className="absolute left-3 sm:left-7 top-1/2 -translate-y-1/2 z-20 bg-white/15 hover:bg-white/30 text-white p-3 rounded-full transition"
+          >
+            <ArrowLeft size={22} />
+          </button>
+
+          {/* Full Image */}
+          <div
+            className="flex flex-col items-center justify-center gap-5 max-w-5xl max-h-full px-10"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={
+                SILVER_PHOTOS[selectedImage].image
+              }
+              alt={
+                SILVER_PHOTOS[selectedImage].name
+              }
+              className="max-w-full max-h-[75vh] object-contain rounded-lg bg-white shadow-2xl"
+            />
+
+            <div className="text-center">
+              <h3 className="font-serif text-white text-xl">
+                {
+                  SILVER_PHOTOS[selectedImage]
+                    .name
+                }
+              </h3>
+
+              <p className="text-white/60 text-xs mt-2">
+                {selectedImage + 1} of{" "}
+                {SILVER_PHOTOS.length}
+              </p>
+            </div>
           </div>
 
-          {loadingGold ? (
-            <div className="text-center py-10 text-xs text-[color:var(--muted-foreground)]">Loading products...</div>
-          ) : goldTrending.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {goldTrending.map((p) => (
-                <ProductCard key={p.id} p={p} />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-10 bg-white/80 rounded-2xl border border-[color:var(--border)] max-w-md mx-auto p-4">
-              <p className="text-[color:var(--espresso)] font-serif text-base">Products will be available soon!</p>
-              <p className="text-xs text-[color:var(--muted-foreground)] mt-1">We are updating new handcrafted designs.</p>
-            </div>
-          )}
+          {/* Next */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              nextImage();
+            }}
+            aria-label="Next image"
+            className="absolute right-3 sm:right-7 top-1/2 -translate-y-1/2 z-20 bg-white/15 hover:bg-white/30 text-white p-3 rounded-full transition"
+          >
+            <ArrowRight size={22} />
+          </button>
         </div>
-      </section>
-
-      <OrnamentalDivider />
-
-      {/* 4. Trending in Silver */}
-      <section className="max-w-7xl mx-auto px-4">
-        <div style={{ backgroundColor: "var(--panel)" }} className="rounded-3xl p-6 md:p-10 border border-[color:var(--border)] shadow-sm">
-          <div className="text-center mb-8">
-            <p className="label-caps text-[color:var(--gold-dark)] text-xs">Modern Sterling Classics</p>
-            <h2 className="font-serif text-3xl md:text-4xl mt-1 text-[color:var(--espresso)]">Trending in Silver</h2>
-            <p className="text-[color:var(--muted-foreground)] text-xs mt-1">Contemporary sterling silver favourites</p>
-          </div>
-
-          {loadingSilver ? (
-            <div className="text-center py-10 text-xs text-[color:var(--muted-foreground)]">Loading products...</div>
-          ) : silverTrending.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {silverTrending.map((p) => (
-                <ProductCard key={p.id} p={p} />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-10 bg-white/80 rounded-2xl border border-[color:var(--border)] max-w-md mx-auto p-4">
-              <p className="text-[color:var(--espresso)] font-serif text-base">Products will be available soon!</p>
-              <p className="text-xs text-[color:var(--muted-foreground)] mt-1">We are currently adding silver products.</p>
-            </div>
-          )}
-        </div>
-      </section>
-
-      <OrnamentalDivider />
-
-      {/* 5. Explore Our Categories (Centered Grid & Dynamic Lists) */}
-      <section className="max-w-7xl mx-auto px-4 mb-16">
-        <div style={{ backgroundColor: "var(--panel)" }} className="rounded-3xl p-6 md:p-10 border border-[color:var(--border)] shadow-sm space-y-10">
-          <div className="text-center">
-            <p className="label-caps text-[color:var(--gold-dark)] text-xs uppercase tracking-widest font-semibold">Catalogue</p>
-            <h2 className="font-serif text-3xl md:text-4xl mt-1 text-[color:var(--espresso)]">Explore Our Categories</h2>
-            <p className="text-[color:var(--muted-foreground)] text-xs mt-1">Browse through our complete collection categories by metal</p>
-          </div>
-
-          {loadingGold && loadingSilver ? (
-            <div className="text-center py-8 text-xs text-[color:var(--muted-foreground)]">Loading categories...</div>
-          ) : (
-            <div className="space-y-10">
-              {/* Gold Categories */}
-              {goldCategories.length > 0 && (
-                <div className="text-center">
-                  <div className="inline-flex items-center justify-center gap-2 mb-4">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[color:var(--gold)]" />
-                    <h3 className="font-serif text-xl text-[color:var(--espresso)] font-semibold">Gold Categories</h3>
-                  </div>
-                  <div className="flex flex-wrap items-center justify-center gap-4">
-                    {goldCategories.map((catName) => (
-                      <Link
-                        key={`gold-${catName}`}
-                        to="/gold"
-                        search={{ cat: catName }}
-                        className="group w-44 sm:w-48 bg-white border border-[color:var(--border)] rounded-2xl p-4 text-center hover:border-[color:var(--gold)] hover:shadow-md transition flex flex-col items-center justify-center gap-1.5"
-                      >
-                        <div className="w-9 h-9 rounded-full bg-[color:var(--cream)] flex items-center justify-center text-[color:var(--gold-dark)] group-hover:bg-[color:var(--gold)] group-hover:text-white transition-colors">
-                          <Sparkles className="w-4 h-4" />
-                        </div>
-                        <span className="font-serif text-sm text-[color:var(--espresso)] font-medium capitalize">
-                          {catName}
-                        </span>
-                        <span className="text-[10px] text-[color:var(--gold-dark)] font-semibold inline-flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
-                          Gold Collection <ArrowRight className="w-3 h-3" />
-                        </span>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Silver Categories */}
-              {silverCategories.length > 0 && (
-                <div className="text-center">
-                  <div className="inline-flex items-center justify-center gap-2 mb-4">
-                    <span className="w-2.5 h-2.5 rounded-full bg-slate-400" />
-                    <h3 className="font-serif text-xl text-[color:var(--espresso)] font-semibold">Silver Categories</h3>
-                  </div>
-                  <div className="flex flex-wrap items-center justify-center gap-4">
-                    {silverCategories.map((catName) => (
-                      <Link
-                        key={`silver-${catName}`}
-                        to="/silver"
-                        search={{ cat: catName }}
-                        className="group w-44 sm:w-48 bg-white border border-[color:var(--border)] rounded-2xl p-4 text-center hover:border-[color:var(--gold)] hover:shadow-md transition flex flex-col items-center justify-center gap-1.5"
-                      >
-                        <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-700 group-hover:bg-slate-700 group-hover:text-white transition-colors">
-                          <Sparkles className="w-4 h-4" />
-                        </div>
-                        <span className="font-serif text-sm text-[color:var(--espresso)] font-medium capitalize">
-                          {catName}
-                        </span>
-                        <span className="text-[10px] text-slate-600 font-semibold inline-flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
-                          Silver Collection <ArrowRight className="w-3 h-3" />
-                        </span>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-            </section>
-
-      <OrnamentalDivider />
-
-      <InstagramReelsSection />
-
+      )}
     </Layout>
   );
 }
 
-function LiveRatesBar() {
-  const [rates, setRates] = useState<{ gold: Record<string, number>; silver: Record<string, number> } | null>(null);
+// ======================================================
+// RATES BAR - STATIC LINK, NO API REQUEST
+// ======================================================
 
-  useEffect(() => {
-    const API_URL = import.meta.env.VITE_API_URL || "https://suvarnagold-16e5.vercel.app/api";
-    fetch(`${API_URL}/rates`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.rates) {
-          setRates(data.rates);
-        } else if (data.gold24) {
-          const parseVal = (v: unknown) => typeof v === "number" ? v : Number(String(v ?? 0).replace(/[₹,]/g, ""));
-          const g24 = parseVal(data.gold24) || 14493;
-          const g22 = parseVal(data.gold22) || Math.round(g24 * (22 / 24));
-          const g18 = parseVal(data.gold18) || Math.round(g24 * (18 / 24));
-          const sVal = parseVal(data.silver) || 240;
-          setRates({
-            gold: { "22K": g22, "24K": g24, "18K": g18 },
-            silver: { "92.5": Math.round(sVal * 0.925) }
-          });
-        }
-      })
-      .catch(() => setRates(null));
-  }, []);
-
+function StaticRatesBar() {
   return (
-    <div style={{ backgroundColor: "var(--cream)" }} className="border-y border-[color:var(--gold)]/20">
+    <div
+      style={{ backgroundColor: "var(--cream)" }}
+      className="border-y border-[color:var(--gold)]/20"
+    >
       <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3 justify-between text-sm">
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-3">
           <span className="label-caps text-[color:var(--gold-dark)] flex items-center gap-1.5">
-            <TrendingUp className="w-3.5 h-3.5" />Today's Rates
+            <TrendingUp className="w-3.5 h-3.5" />
+            Today's Rates
           </span>
-          {rates ? (
-            [
-              ["Gold 22K", rates.gold["22K"]],
-              ["Gold 24K", rates.gold["24K"]],
-              ["Gold 18K", rates.gold["18K"]],
-              ["Silver 925", rates.silver["92.5"]],
-            ].map(([l, v]) => (
-              <span key={l as string} className="bg-white/70 border border-[color:var(--gold)]/30 rounded-full px-3 py-1 text-xs font-medium">
-                <span className="text-[color:var(--espresso)]">{l}</span>
-                <span className="text-[color:var(--gold-dark)] ml-2 font-bold font-sans">₹{v}/g</span>
-              </span>
-            ))
-          ) : (
-            <span className="text-xs text-[color:var(--muted-foreground)]">Loading rates...</span>
-          )}
+
+          <span className="text-xs text-[color:var(--muted-foreground)]">
+            View gold and silver rates
+          </span>
         </div>
-        <Link 
-          to="/liverates" 
+
+        <Link
+          to="/liverates"
           className="flex items-center gap-1.5 text-[color:var(--gold-dark)] font-semibold text-xs hover:underline transition-all"
         >
-          <RefreshCw className="w-3.5 h-3.5" /> View details
+          <RefreshCw className="w-3.5 h-3.5" />
+          View details
         </Link>
       </div>
     </div>

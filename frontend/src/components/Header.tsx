@@ -6,8 +6,8 @@ import { useStore } from "@/lib/store";
 
 const NAV = [
   { to: "/", label: "Home" },
-  { to: "/gold", label: "Gold" },
-  { to: "/silver", label: "Silver" },
+  // { to: "/gold", label: "Gold" },
+  // { to: "/silver", label: "Silver" },
   { to: "/liverates", label: "Live Rates" },
   { to: "/contact", label: "Contact Us" },
 ];
